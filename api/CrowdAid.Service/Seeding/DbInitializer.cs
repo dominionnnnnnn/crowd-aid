@@ -4,6 +4,7 @@ using CrowdAid.Data.Entities;
 using CrowdAid.Data.IRepo;
 using CrowdAid.Data.Options;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
@@ -12,7 +13,8 @@ namespace CrowdAid.Service.Seeding;
 
 /// <summary>
 /// Creates the schema and seeds only what has no create screen (spec §7, fresh start):
-/// the admin account and outreach events. No campaigns, applications or donations.
+/// the admin account and outreach events. Fictional demo campaigns and donations are added
+/// by DemoDataSeeder unless Seed__DemoData=false.
 /// </summary>
 public static class DbInitializer
 {
@@ -41,6 +43,10 @@ public static class DbInitializer
 
         await SeedAdminAsync(db, sp, logger, ct);
         await SeedOutreachAsync(db, ct);
+
+        // Fictional demo campaigns and donations (on by default; set Seed__DemoData=false to skip).
+        if (sp.GetRequiredService<IConfiguration>().GetValue("Seed:DemoData", true))
+            await DemoDataSeeder.SeedAsync(db, logger, ct);
     }
 
     private static async Task SeedAdminAsync(AppDbContext db, IServiceProvider sp, ILogger logger, CancellationToken ct)
