@@ -82,9 +82,10 @@
 .public-app .p-outline {
   color: var(--color-primary);
   border: 1.5px solid var(--color-primary);
-  background: #fff;
+  background: transparent;
 }
-.public-app .p-outline:hover {
+.public-app .p-outline:hover,
+.public-app .p-outline:focus-visible {
   background: var(--color-surface-tint);
 }
 .public-app input,
@@ -1553,5 +1554,41 @@
   }
   .public-app .p-faq-item h3 button {
     padding: 20px 24px;
+  }
+}
+
+.p-menu a.active {
+  color: var(--color-primary);
+  background: var(--color-surface-tint);
+}
+.p-faq-heading h2 {
+  scroll-margin-top: 96px;
+}
+.p-menu .button {
+  justify-content: space-between;
+  min-height: 48px;
+  border-radius: 10px;
+  padding: 11px 20px;
+}
+@media (min-width: 900px) and (max-width: 1120px) {
+  .p-header-inner {
+    padding-left: 20px;
+    padding-right: 20px;
+  }
+  .p-logo {
+    height: 30px;
+  }
+  .p-desktop-nav {
+    gap: 0;
+  }
+  .p-desktop-nav > a:not(.button),
+  .p-desktop-nav > button:not(.button) {
+    padding: 0 7px;
+    font-size: 13px;
+  }
+  .p-desktop-nav .button {
+    padding: 10px;
+    font-size: 13px;
+    margin-left: 4px;
   }
 }

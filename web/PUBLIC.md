@@ -1,67 +1,75 @@
-# Public pages, live auth and demo dashboard
+# CrowdAid frontend — live API
 
-All edits are in `web/`. C# controllers and DTOs are the API contract. The shared axios instance has baseURL `/api/v1`; JSON is camelCase. Public requests, login and activation do not carry an unrelated admin token. Error messages and field errors use `{ error: { code, message, fields } }`.
+All browser-facing features now use the real C# API through the shared axios instance with baseURL `/api/v1`. JSON routes, field names and envelopes follow the controllers and DTOs. `USE_MOCKS = false` for admin and `DASHBOARD_MOCKS = false` for campaigner data. The existing mock files remain unused; there is no fallback to fabricated data when the API fails.
 
 ## Routes and endpoints
 
-Endpoints below are relative to `/api/v1`, except the absolute scaffold paths.
+All paths below are relative to `/api/v1`, except the explicit scaffold paths.
 
-| Route / feature             | Endpoints                                                                                                                                   | Current mode                                                                |
-| --------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------- |
-| `/`                         | `GET /campaigns?featured=true`                                                                                                              | Live campaign data; responsive community hero and FAQ are static            |
-| `/give`                     | Same Home page with Give help initially expanded                                                                                            | Live featured data                                                          |
-| `/campaigns`                | `GET /campaigns?q=&location=&need=`                                                                                                         | Live                                                                        |
-| `/campaigns/:id`            | `GET /campaigns/{id}`                                                                                                                       | Live                                                                        |
-| `/apply`                    | `POST /applications`                                                                                                                        | Live                                                                        |
-| `/apply/status`             | `GET /applications/status?reference=&email=`                                                                                                | Live                                                                        |
-| `/help?campaign=&type=`     | Optional `GET /campaigns/{id}`, `POST /practical-help-offers`                                                                               | Live                                                                        |
-| `/volunteer?path=outreach`  | `GET /outreach`, `POST /volunteers/outreach`                                                                                                | Live                                                                        |
-| `/volunteer?path=community` | `POST /volunteers/community`                                                                                                                | Live                                                                        |
-| `/donate?campaign=`         | Campaign lookup/list, `POST /donations`                                                                                                     | Live Paystack initialization                                                |
-| `/donate/result?ref=`       | `GET /donations/{reference}`                                                                                                                | Live Paystack verification                                                  |
-| `/contact?campaign=`        | Optional campaign lookup, `POST /contact-messages`                                                                                          | Live                                                                        |
-| Campaign contact dialog     | `POST /contact-messages`                                                                                                                    | Live; shares the contact page's form component                              |
-| `/activate?token=`          | `POST /auth/activation/check`, `POST /auth/activate`                                                                                        | **Live authentication**                                                     |
-| `/login`                    | `POST /auth/login`                                                                                                                          | **Live authentication**                                                     |
-| `/dashboard`                | `GET /auth/me` for identity; `/me/campaign`, `/me/campaign/donations`, `/me/campaign/offers`, `/me/payout`, `/me/withdrawals` for demo data | **Live identity; mocked dashboard data**                                    |
-| `/dashboard/offers`         | Same workspace load, displaying practical-help responses without supporter names/phones                                                     | Live identity; mocked data                                                  |
-| `/dashboard/withdraw`       | Same workspace load; `PUT /me/payout`, `POST /me/withdrawals`                                                                               | Live identity; mocked data/actions, labelled Demo                           |
-| `/admin`                    | Admin login, applications, offers, volunteers, messages, activation links; withdrawals live URLs configured                                 | Live; withdrawal backend routes absent at integration time (see `ADMIN.md`) |
-| `/__check`                  | Absolute `/api/health`, `/api/hello`, `/api/test-email` with per-request `baseURL: ""`                                                      | Live scaffold                                                               |
-| Unmatched route             | Design-style 404                                                                                                                            | Static                                                                      |
+| Route / feature                                  | Endpoints                                                                                                        | Mode                                                               |
+| ------------------------------------------------ | ---------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------ |
+| `/`, `/give`                                     | `GET /campaigns?featured=true`                                                                                   | Live data; static hero/FAQ; `/give` initially expands ways to help |
+| `/campaigns`                                     | `GET /campaigns?q=&location=&need=`                                                                              | Live                                                               |
+| `/campaigns/:id`                                 | `GET /campaigns/{id}`                                                                                            | Live                                                               |
+| `/apply`                                         | `POST /applications`                                                                                             | Live                                                               |
+| `/apply/status`                                  | `GET /applications/status?reference=&email=`                                                                     | Live                                                               |
+| `/help?campaign=&type=`                          | Optional campaign lookup, `POST /practical-help-offers`                                                          | Live                                                               |
+| `/volunteer?path=outreach`                       | `GET /outreach`, `POST /volunteers/outreach`                                                                     | Live                                                               |
+| `/volunteer?path=community`                      | `POST /volunteers/community`                                                                                     | Live                                                               |
+| `/contact?campaign=` and campaign contact dialog | Optional campaign lookup, `POST /contact-messages`                                                               | Live                                                               |
+| `/donate?campaign=`                              | Campaign lookup/list, `POST /donations`                                                                          | Live Paystack initialization                                       |
+| `/donate/result?ref=`                            | `GET /donations/{reference}`                                                                                     | Live verification                                                  |
+| `/activate?token=`                               | `POST /auth/activation/check`, `POST /auth/activate`                                                             | Live                                                               |
+| `/login`                                         | `POST /auth/login`                                                                                               | Live                                                               |
+| `/dashboard`                                     | `GET /auth/me`, `/me/campaign`, `/me/campaign/donations`, `/me/campaign/offers`, `/me/payout`, `/me/withdrawals` | Live                                                               |
+| `/dashboard/offers`                              | Same live workspace load; displays campaigner-safe offers                                                        | Live                                                               |
+| `/dashboard/withdraw`                            | Same workspace load, `PUT /me/payout`, `POST /me/withdrawals`                                                    | Live; server-side demo withdrawals, no bank transfer               |
+| `/admin`                                         | Admin applications, inbox, account links and withdrawals; see `ADMIN.md`                                         | Live                                                               |
+| `/__check`                                       | Absolute `/api/health`, `/api/hello`, `/api/test-email` with per-request empty baseURL                           | Live scaffold                                                      |
+| Unknown route                                    | Design-style 404                                                                                                 | Static                                                             |
 
-`src/api/public.js` contains only live calls and no mock switch. All existing public controller routes already have matching frontend consumers. Paystack's webhook is server-to-server and has no browser action. No public campaign, donor total, submission reference or payment result is fabricated.
+## CTA and mobile navigation
 
-## Authentication and dashboard boundary
+Get help is the solid primary CTA. Give help uses the shared `.p-outline` variant in both the hero and nav: transparent background, 1.5px brand-green border/text, light green hover/focus tint, same dimensions/radius/padding as the primary.
 
-`src/api/campaigner.js` now always sends `/auth/login`, `/auth/activation/check`, `/auth/activate`, and `/auth/me` to the real API. Authentication has no mock switch. Only `/me/*` requests use `DASHBOARD_MOCKS = true` while those endpoints do not exist. Set that one flag to false when the dashboard backend is ready.
+At mobile widths, Menu opens a native modal. Give help is a button that toggles a visible nested section, with `aria-expanded` and `aria-controls`. Its links navigate to Campaigns, Practical help and Volunteer, and close the menu. Enter activates the button; Escape collapses the nested section and returns focus to Give help, while Escape on the closed section closes the modal. Native dialog focus trapping and restoration remain in place. Navigation displays Dashboard and Sign out when a campaigner token is present, Sign in otherwise; sign out clears only the campaigner session.
 
-Login sends `{ email, password }` and consumes `{ token, expiresIn, user }`. Activation check sends `{ token }` and consumes `{ valid, name, emailMasked, applicationRef, patientName }`; application/patient fields may be null. Activation submits only `{ token, password }`, consumes the same login response, stores its JWT and opens the dashboard. Password confirmation is local. The new password is 8–128 characters. Expired, used and invalid-link errors display the backend's message.
+A manual browser check at **375px** confirmed tap-open, all three destinations closing the menu, Enter-open, and Escape-collapse/focus return. No test files or test suite were added.
 
-The activation token is captured in memory, removed from the address bar, and sent only in request bodies. `index.html` supplies a no-referrer policy. Passwords and activation links are not stored or logged. Old demo tokens and made-up credentials are no longer accepted by the UI's auth adapter.
+## Live campaigner contracts
 
-Campaigner session key: `crowdaid.campaigner.session`. Admin session key: `crowdaid.admin.session`. Tokens live in memory and separate sessionStorage entries. Each role sends its own Bearer token; the admin `/auth/me` request explicitly selects the admin session so simultaneous admin/campaigner sign-ins do not overwrite one another. Protected 401 responses expire only the corresponding session.
+`GET /me/campaign` returns `{ application: { reference, status, patientName }, campaign: MeCampaignDto | null, payoutSet }`. A null campaign displays **Your campaign is being prepared for publication**, with the application reference/status and an explanation that the application is still private. Funding and withdrawal actions wait for publication; empty donations/offers/history stay empty.
 
-The dashboard fetches the real user with `GET /auth/me` and uses that user's name. All campaign figures, donations, practical offers, payout details and withdrawals are still fictional mock examples, clearly labelled “Demo: no real money moves”. The dashboard's mock store uses an internal demo marker rather than treating the real JWT as mock credentials. Mock data does not publish or mutate any live campaign and resets on page reload. Names and phones are absent from campaigner practical-help DTOs. Do not interpret mock campaign content as the logged-in person's real application.
+A campaign contains its id, title, publication flag, raised/goal/supporters, withdrawn, pendingWithdrawals, available, needs and updates. These are server values, never hardcoded totals. Money uses whole naira formatted as ₦ with en-NG grouping; dates use en-NG.
 
-## Home image and FAQ
+- Donations: `{ data: [{ reference, displayName, amount, createdAt }], total }`; confirmed-only backend data, no phone/email/payment details.
+- Offers: `{ data: MeOfferDto[] }`; types, optional details, availability, area, status, date and reference; no supporter names or phones.
+- GET payout: masked `{ bankName, accountNumber, accountName }`, or JSON null. PUT sends those three fields with a full 10-digit accountNumber and consumes the masked response. Full account numbers are not logged or stored by the frontend.
+- Withdrawals GET: `{ data: [{ reference, amount, status, requestedAt, decidedAt, note }], available }`.
+- Withdrawals POST: `{ amount }` with a whole naira amount at least ₦1,000 and no more than available; requires payoutSet and a published campaign. Response: `{ reference, amount, status, available, demo }`.
 
-The hero uses `/assets/hero-community.jpg` (1024×1536) and `/assets/hero-community-sm.jpg` (512×768) through `<picture>` and responsive `srcSet`/`sizes`. Explicit dimensions plus a reserved aspect ratio prevent image-loading layout shift. The image uses object-fit cover and 50% 30% positioning, a 16px radius, a subtle shadow and a soft offset green accent. Two small cards use the existing brand/icon system. Text is left/image right on desktop; the image follows the text on mobile. Alt text is exactly: “CrowdAid volunteers in white vests collecting donations and sharing flyers at a local market”.
+Saving payout details immediately updates the masked display and payoutSet gate, then refreshes backend data. A successful withdrawal shows the returned reference/status/available and **Demo: no real money moves**. The balance updates immediately from the response, and history plus campaign balances refresh. Request/status records are live; the backend intentionally makes no actual payout. An error preserves the form and displays the server message/field errors.
 
-Home includes all 12 user-supplied FAQ questions and answers unchanged. Native buttons expose aria-expanded/aria-controls, Enter/Space work normally, all answers start closed, and only one answer opens at a time. The answer phrases “Get Help”, “Volunteer section” and “Contact Us section” link to `/apply`, `/volunteer` and `/contact` respectively.
+## Authentication and errors
 
-## Public form and payment behavior
+Login sends `{ email, password }` and consumes `{ token, expiresIn, user }`. Activation checks a token in a POST body, removes it from the address bar, displays the returned identity/application (nullable fields supported), then submits `{ token, password }`. Password confirmation stays local. `GET /auth/me` restores the real identity. Passwords and activation links are never logged or stored.
 
-- Application email is required. Fields match `CreateApplicationRequest`, optional amounts become null and supplied amounts remain integer naira. Application copy explains that approved applicants receive an account link by email. Documents are requested privately; no download/upload endpoint is invented.
-- Offers and volunteer submissions use the exact C# request field names and lookup values. Outreach selectors use actual returned event IDs. Success screens show the returned references. The contact page and dialog submit `{ campaignId, name, phone, message }`; general enquiries use null campaignId.
-- Donating sends `campaignId`, integer naira `amount`, `name`, `anonymous`, `email`, `method`. There is no simulated outcome selector. The server-returned amount/fee/total and reference are shown before navigating to the HTTPS authorizationUrl. No card or bank details are collected by CrowdAid.
-- Donation return checks the backend up to four times at 2.5-second intervals while pending, then provides a manual recheck. It never retries payment automatically. Returned campaign totals are authoritative and the “Test mode, no real money” badge follows testMode. Donation drafts survive hosted-checkout return in sessionStorage and clear on confirmed success; they contain no card data or passwords.
-- Errors map to fields, preserve answers, and use borders plus ⚠ text. Controls retain at least 44px targets and 3px focus rings. Unknown/unpublished campaigns use the unavailable state; empty campaign/update/outreach states remain truthful.
+Campaigner token: `crowdaid.campaigner.session`. Admin token: `crowdaid.admin.session`. Each is held in memory plus its own sessionStorage entry. The axios interceptor selects the correct Bearer token, including when both roles use `/auth/me`. A protected campaigner 401 clears its session and redirects to `/login?expired=1` with “Your session expired. Sign in again.” Admin 401 behavior remains separate.
 
-## Backend dependencies and validation
+Backend `{ error: { code, message, fields } }` messages are shown directly and fields map to matching controls. Non-JSON HTTP errors get plain retry wording; axios's generic “Request failed with status code…” text is not used. Inputs preserve answers and have border + ⚠ errors, 44px targets and 3px focus rings.
 
-Live behavior requires the API/database and real account credentials. Approval/resend email goes to MailHog in demo, not the applicant's real inbox. Paystack requires the backend's test configuration and `/donate/result` callback. No secrets are included in the frontend.
+## Other public behavior
 
-Admin withdrawals: the live request paths are configured, but this checkout currently has no withdrawal controller/DTOs. Campaigner `/me/*` data remains intentionally mocked. Everything else exposed by the reviewed browser-facing controllers is wired live.
+Application email is required; optional amounts are null or integer naira. Approval-account copy and private document follow-up remain. Live event IDs populate outreach selectors. Success screens show returned references. Contact submits `{ campaignId, name, phone, message }`, with null campaignId for general enquiries.
 
-Run `npm run build`. No tests were added or run; nothing was pushed, merged or deployed.
+Donation initialization shows the server's amount/platformFee/total before navigating to the HTTPS checkout URL. No card details are collected by CrowdAid. Return polls verification up to four times at 2.5-second intervals while pending, then offers a manual check without restarting payment. Campaign totals are authoritative; testMode controls the no-real-money badge. Donation drafts survive checkout return in sessionStorage and clear after confirmed success.
+
+The responsive hero and all 12 supplied FAQ items remain in place, including links to `/apply`, `/volunteer` and `/contact`.
+
+## Remaining endpoint gaps and validation
+
+No reviewed backend endpoint exists for public evidence upload/secure document download, self-service password reset, creating outreach events, or editing campaign updates. The frontend does not invent those actions. Admin activation resend provides the supported password-reset route. Paystack webhooks are server-to-server and do not need a browser action. All currently implemented frontend data flows are live.
+
+Live API calls need the running API/database; Paystack additionally needs backend test configuration. During the 375px local preview, API calls returned server errors, so authenticated withdrawal behavior was aligned to the C# contract but not exercised end-to-end with real credentials.
+
+Run `npm run build`. No tests were created or run, and nothing was pushed, merged or deployed. Changes are confined to `web/`.

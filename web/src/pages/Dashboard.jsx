@@ -6,7 +6,7 @@ import {
   useLocation,
   useNavigate,
 } from "react-router-dom";
-import { campaignerApi, DASHBOARD_MOCKS } from "../api/campaigner";
+import { campaignerApi } from "../api/campaigner";
 import {
   getCampaignerToken,
   setCampaignerToken,
@@ -37,7 +37,7 @@ export default function Dashboard() {
     return () =>
       window.removeEventListener("crowdaid:campaigner-expired", expired);
   }, [navigate]);
-  if (!token) return <Navigate to="/login" replace />;
+  if (!token) return <Navigate to="/login?expired=1" replace />;
   return (
     <DashboardContent
       onSignOut={() => {
@@ -104,13 +104,6 @@ function DashboardContent({ onSignOut }) {
         </div>
         <button onClick={onSignOut}>Sign out</button>
       </div>
-      {DASHBOARD_MOCKS && (
-        <p className="p-warning">
-          <strong>Demo: no real money moves.</strong> You are signed in to your
-          real account. The campaign figures, offers and withdrawals below are
-          fictional examples while dashboard data is being connected.
-        </p>
-      )}
       <nav className="p-dashboard-nav" aria-label="Your account">
         <NavLink to="/dashboard" end>
           Overview
@@ -142,11 +135,13 @@ function DashboardContent({ onSignOut }) {
           ))}
         </ol>
         {!c && (
-          <p className="p-info">
-            Your application has been approved and is still private. CrowdAid
-            will ask for your separate publication consent before your campaign
-            goes public.
-          </p>
+          <div className="p-info">
+            <strong>Your campaign is being prepared for publication</strong>
+            <p>
+              Your application is still private. CrowdAid will ask for your
+              separate publication consent before your campaign goes public.
+            </p>
+          </div>
         )}
       </section>
       {view === "overview" ? (
@@ -276,7 +271,28 @@ function DashboardContent({ onSignOut }) {
               <WithdrawalForm
                 available={withdrawals.available}
                 payoutSet={overview.payoutSet}
-                onChanged={resource.reload}
+                onChanged={(result) => {
+                  setSnapshot((current) => ({
+                    ...current,
+                    withdrawals: {
+                      ...current.withdrawals,
+                      available: result.available,
+                    },
+                    overview: {
+                      ...current.overview,
+                      campaign: current.overview.campaign
+                        ? {
+                            ...current.overview.campaign,
+                            available: result.available,
+                            pendingWithdrawals:
+                              current.overview.campaign.pendingWithdrawals +
+                              result.amount,
+                          }
+                        : null,
+                    },
+                  }));
+                  resource.reload();
+                }}
               />
             )}
           </section>
@@ -288,7 +304,17 @@ function DashboardContent({ onSignOut }) {
                 {payout.accountName}
               </p>
             )}
-            <PayoutForm payout={payout} onChanged={resource.reload} />
+            <PayoutForm
+              payout={payout}
+              onChanged={(saved) => {
+                setSnapshot((current) => ({
+                  ...current,
+                  payout: saved,
+                  overview: { ...current.overview, payoutSet: true },
+                }));
+                resource.reload();
+              }}
+            />
           </section>
           <section className="p-card p-stack">
             <h2>Withdrawal history</h2>
@@ -336,15 +362,20 @@ function WithdrawalForm({ available, payoutSet, onChanged }) {
       onSubmit={f.submit(
         async (v) => {
           const result = await campaignerApi.withdraw(Number(v.amount));
-          onChanged();
+          onChanged(result);
           return result;
         },
         (v) =>
-          !wholeAmount(v.amount, 1000)
-            ? { amount: "Enter a whole naira amount of at least ₦1,000." }
-            : Number(v.amount) > available
-              ? { amount: "Enter no more than your available balance." }
-              : {},
+          !payoutSet
+            ? {
+                amount:
+                  "Save your payout details before requesting a withdrawal.",
+              }
+            : !wholeAmount(v.amount, 1000)
+              ? { amount: "Enter a whole naira amount of at least ₦1,000." }
+              : Number(v.amount) > available
+                ? { amount: "Enter no more than your available balance." }
+                : {},
       )}
     >
       <ErrorSummary error={f.error} prefix={f.prefix} />
@@ -375,7 +406,8 @@ function WithdrawalForm({ available, payoutSet, onChanged }) {
           <p>
             Reference {f.result.reference} · {f.result.status}
           </p>
-          <p>Available: {money(f.result.available)}. No real money moves.</p>
+          <p>Available: {money(f.result.available)}.</p>
+          <p>Demo: no real money moves.</p>
         </div>
       )}
     </form>
@@ -397,7 +429,7 @@ function PayoutForm({ payout, onChanged }) {
         async (v) => {
           const result = await campaignerApi.savePayout(v);
           f.set("accountNumber", "");
-          onChanged();
+          onChanged(result);
           return result;
         },
         (v) => ({
@@ -410,8 +442,8 @@ function PayoutForm({ payout, onChanged }) {
     >
       <ErrorSummary error={f.error} prefix={f.prefix} />
       <p className="p-hint">
-        Demo only: use fictional bank details. Enter the full number to update
-        it; saved numbers are displayed masked.
+        Your payout details are private. Enter the full number to update it;
+        saved numbers are displayed masked.
       </p>
       <div className="p-form-grid">
         <Field label="Bank name *" {...f.bind("bankName")} />
@@ -424,11 +456,11 @@ function PayoutForm({ payout, onChanged }) {
       </div>
       <Field label="Account name *" {...f.bind("accountName")} />
       <Submit busy={f.busy} busyLabel="Saving…">
-        Save demo payout details
+        Save payout details
       </Submit>
       {f.result && (
         <p className="p-info" role="status">
-          Demo payout details saved.
+          Payout details saved.
         </p>
       )}
     </form>

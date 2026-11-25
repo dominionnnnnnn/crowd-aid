@@ -55,17 +55,7 @@ export default function Inbox({ kind }) {
         if (active) setRows(result.data);
       })
       .catch((e) => {
-        if (active)
-          setError(
-            kind === "withdrawals" &&
-              e.response?.status === 404 &&
-              !e.response?.data?.error
-              ? {
-                  message:
-                    "The withdrawals endpoint is not available on this backend yet.",
-                }
-              : errorBody(e),
-          );
+        if (active) setError(errorBody(e));
       })
       .finally(() => {
         if (active) setLoading(false);
@@ -150,8 +140,8 @@ export default function Inbox({ kind }) {
       {kind === "withdrawals" && (
         <>
           <p className="warning-box">
-            <strong>Demo withdrawals.</strong> No money moves. Mark paid only
-            changes the simulated status.
+            <strong>Demo: no real money moves.</strong> Mark paid only changes
+            the simulated status.
           </p>
           <Field name="withdrawal-filter" label="Filter by status">
             <select
@@ -422,12 +412,24 @@ export default function Inbox({ kind }) {
           reference={modal.row.reference}
           onClose={() => setModal(null)}
           onConfirm={async (values) => {
-            await adminApi.withdrawalAction(modal.row.reference, {
-              action: modal.action,
-              ...values,
-            });
+            const updated = await adminApi.withdrawalAction(
+              modal.row.reference,
+              {
+                action: modal.action,
+                ...values,
+              },
+            );
+            setRows((current) =>
+              current.map((row) =>
+                row.reference === updated.reference
+                  ? { ...row, status: updated.status, isNew: false }
+                  : row,
+              ),
+            );
             setVersion((v) => v + 1);
-            setNotice("Demo withdrawal updated. No money moved.");
+            setNotice(
+              `${updated.reference} marked ${updated.status}. Demo: no real money moves.`,
+            );
           }}
         >
           <p>

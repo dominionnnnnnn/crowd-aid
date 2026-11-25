@@ -3,7 +3,7 @@ import {
   getCampaignerToken,
   expireCampaignerSession,
 } from "./campaignerSession";
-export const DASHBOARD_MOCKS = true;
+export const DASHBOARD_MOCKS = false;
 async function request(method, path, data, params) {
   // Authentication and session restoration always use the real backend.
   if (!path.startsWith("/me/") || !DASHBOARD_MOCKS)

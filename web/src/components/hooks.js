@@ -17,8 +17,10 @@ export function asError(error) {
       body?.message ||
       (error.code === "ECONNABORTED"
         ? "This is taking longer than usual. Please try again; your answers are kept."
-        : error.message ||
-          "We could not complete that request. Please try again."),
+        : error.response
+          ? "We could not complete that request. Please try again."
+          : error.message ||
+            "We could not complete that request. Please try again."),
     fields,
   };
 }

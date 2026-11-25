@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import api from "./api";
+import { asError } from "./components/hooks";
 
 // CrowdAid scaffold page: proves React -> /api -> Postgres and API -> MailHog.
 // Replace with the real app (routes, pages from the design) once hosting is confirmed.
@@ -14,11 +15,11 @@ export default function App() {
     api
       .get("/api/health", { baseURL: "" })
       .then((r) => setHealth(r.data))
-      .catch((e) => setError(e.response?.data?.error?.message || e.message));
+      .catch((e) => setError(asError(e).message));
     api
       .get("/api/hello", { baseURL: "" })
       .then((r) => setHello(r.data))
-      .catch((e) => setError(e.response?.data?.error?.message || e.message));
+      .catch((e) => setError(asError(e).message));
   }, []);
 
   const sendTest = async (e) => {
@@ -28,7 +29,8 @@ export default function App() {
       const r = await api.post("/api/test-email", { to }, { baseURL: "" });
       setMail(`✅ Sent to ${r.data.to}. Open MailHog to see it.`);
     } catch (err) {
-      setMail(`❌ ${err.response?.data?.error?.fields?.to || err.message}`);
+      const error = asError(err);
+      setMail(`⚠ ${error.message}${error.fields.to ? ` ${error.fields.to}` : ""}`);
     }
   };
 

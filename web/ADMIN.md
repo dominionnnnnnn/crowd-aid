@@ -1,57 +1,59 @@
-# CrowdAid admin — live API integration
+# CrowdAid admin — live integration
 
-`src/api/admin.js` has `USE_MOCKS = false`. All admin requests use the single axios instance in `src/api.js`, with baseURL `/api/v1`. The old admin mock modules remain in place but are not used in live mode.
+All admin features now use the real backend through `src/api/admin.js` (`USE_MOCKS = false`) and the single axios instance (`baseURL: /api/v1`). Admin mock files remain in place but are unused. C# controllers and DTOs are the contract; JSON is camelCase.
 
 ## Authentication
 
-- `POST /admin/auth/login` sends `{ email, password }` and reads `{ token, expiresIn, admin: { id, name, role } }`.
-- The JWT is held in memory and `sessionStorage` at `crowdaid.admin.session`. Passwords are never persisted.
-- The returned admin name appears in the top bar. `GET /auth/me` restores/validates the admin session on reload; it explicitly uses the admin token, even if a campaigner is signed in in the same browser.
-- Only protected admin requests carry the admin Bearer token. Protected 401 responses clear the admin session and show “Your session expired. Sign in again.” Login errors show the backend's generic credential message.
-- Signing out clears only the admin token. Campaigner sessions remain separate.
+`POST /admin/auth/login` sends `{ email, password }` and consumes `{ token, expiresIn, admin: { id, name, role } }`. The admin name appears in the top bar. `GET /auth/me` validates/restores the admin session, explicitly choosing the admin token even when a campaigner is also signed in.
 
-## Live screens and C# contracts
+The admin JWT is held in memory and sessionStorage under `crowdaid.admin.session`. Only protected admin calls and the admin session-restore request use it. A protected 401 clears only this session and shows “Your session expired. Sign in again.” Passwords are never persisted. Signing out leaves the campaigner session untouched.
 
-The source of truth is `CrowdAid.Api/Controllers/` and `CrowdAid.Data/DTOs/Admin/` / `Auth/`, read without modifying backend files. JSON is camelCase.
+## Live API inventory
 
-| Screen / action         | Relative endpoint                                           | Shape used                                                                                                                                               |
-| ----------------------- | ----------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Sign in                 | `POST /admin/auth/login`                                    | `AdminLoginResponse`                                                                                                                                     |
-| Restore session         | `GET /auth/me`                                              | `UserSummaryDto`; role must be `admin`                                                                                                                   |
-| Applications filter     | `GET /admin/applications?status=`                           | `{ data: AdminApplicationRowDto[] }`                                                                                                                     |
-| Private detail          | `GET /admin/applications/{reference}`                       | `AdminApplicationDetailDto`, including `reference`, `receivedAt`, application fields, verification, files, log, publication, campaignId and account      |
-| Verification            | `PATCH /admin/applications/{reference}/verification`        | Body `{ status, method }`; response is the updated full detail, which the UI consumes directly                                                           |
-| Decisions               | `POST /admin/applications/{reference}/actions`              | `ApplicationActionRequest`: `action`, and the relevant `needed`, `message`, `reason`, `note`; response `{ reference, status, account }`                  |
-| Publish                 | `POST /admin/applications/{reference}/publish`              | `title`, `location`, integer `goal`, `organizer`, `story`, `consentRecorded`, `publicationConsent`, `contentReviewed`; response `{ campaignId, status }` |
-| New activation link     | `POST /admin/applications/{reference}/activation`           | Direct `AccountLinkDto`, not an `{ account: ... }` envelope                                                                                              |
-| Practical-help offers   | `GET /admin/offers`                                         | `{ data: AdminOfferRowDto[] }`                                                                                                                           |
-| Offer status            | `PATCH /admin/offers/{reference}`                           | `{ status }`; the returned `AdminOfferRowDto` replaces the displayed row                                                                                 |
-| Volunteers              | `GET /admin/volunteers?outreachId=...` or `?kind=Community` | `{ data: AdminVolunteerRowDto[] }`; `roleOrInterests` is an array, `availability` is a string for outreach or an array for community                     |
-| Outreach filter options | `GET /outreach`                                             | Live event IDs, titles and dates; no hardcoded `o1`                                                                                                      |
-| Messages                | `GET /admin/messages`                                       | `{ data: AdminMessageRowDto[] }`                                                                                                                         |
-| Withdrawals queue       | `GET /admin/withdrawals?status=`                            | Live request configured; see current backend dependency below                                                                                            |
-| Withdrawal decision     | `POST /admin/withdrawals/{reference}/actions`               | Live request configured with `action` and relevant `note`, `reason`, `message`, `transferReference`; see dependency below                                |
+Paths below are relative to `/api/v1`.
 
-Application flow: opening Received moves it to In review on the server. Verification locks after Approved/Published/Rejected. More info requested must be marked received before approval. Approve requires application status Verified and saved verification Verified. Approve never publishes. Publication fields start empty, both consent/review boxes must be ticked, and publication has its own confirmation dialog.
+| Feature                 | Endpoint                                                 | Contract                                                                                                              |
+| ----------------------- | -------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------- |
+| Sign in                 | `POST /admin/auth/login`                                 | `AdminLoginResponse`                                                                                                  |
+| Session restore         | `GET /auth/me`                                           | `UserSummaryDto`, role `admin`                                                                                        |
+| Application list        | `GET /admin/applications?status=`                        | `{ data: AdminApplicationRowDto[] }`                                                                                  |
+| Application detail      | `GET /admin/applications/{reference}`                    | Full `AdminApplicationDetailDto`, private contact details, verification, files, log, publication, campaignId, account |
+| Verification            | `PATCH /admin/applications/{reference}/verification`     | `{ status, method }`; consumes the returned full detail                                                               |
+| Decisions               | `POST /admin/applications/{reference}/actions`           | `action` plus applicable `needed`, `message`, `reason`, `note`; response `{ reference, status, account }`             |
+| Publication             | `POST /admin/applications/{reference}/publish`           | Public fields, integer `goal`, `consentRecorded`, both consent/review flags; response `{ campaignId, status }`        |
+| Activation resend       | `POST /admin/applications/{reference}/activation`        | Direct `AccountLinkDto`                                                                                               |
+| Offers                  | `GET /admin/offers`                                      | `{ data: AdminOfferRowDto[] }`                                                                                        |
+| Offer status            | `PATCH /admin/offers/{reference}`                        | `{ status }`; returned row replaces the displayed row                                                                 |
+| Volunteers              | `GET /admin/volunteers?outreachId=` or `?kind=Community` | `{ data: AdminVolunteerRowDto[] }`                                                                                    |
+| Outreach filter options | `GET /outreach`                                          | Actual event IDs, titles and dates                                                                                    |
+| Messages                | `GET /admin/messages`                                    | `{ data: AdminMessageRowDto[] }`                                                                                      |
+| Withdrawals             | `GET /admin/withdrawals?status=`                         | `{ data: AdminWithdrawalRowDto[] }`                                                                                   |
+| Withdrawal decisions    | `POST /admin/withdrawals/{reference}/actions`            | `WithdrawalActionRequest`; response `{ reference, status }`                                                           |
 
-Mutation success is retained if a follow-up detail refresh fails: the UI keeps the returned status/link and shows the refresh error instead of asking the admin to submit the same successful decision again.
+## Withdrawals — verified against C#
 
-## Account links and demo email
+`AdminWithdrawalsController` and the admin withdrawal DTOs are now present and integrated. Each row contains `reference`, `campaignTitle`, `applicantName`, `amount`, `status`, `requestedAt`, `isNew`, and `payout: { bankName, accountNumber, accountName }`. Full payout numbers are visible only to admins.
 
-Approve's optional `account` and activation resend's direct response contain `state`, `email`, `phone`, nullable `activationLink`, nullable `expiresAt`, and nullable `emailSent`. The raw link stays in the current detail view's memory only. It is never logged or stored in sessionStorage. GET detail does not return it.
+Decision bodies use `action` with applicable `note`, `reason`, `message`, `transferReference`:
 
-When `emailSent` is true, the panel explains that the activation email went to the **MailHog demo inbox**, not the applicant's real inbox. When false, it offers private sharing. An already-activated account can have no link and `emailSent: null`; the UI handles that explicitly. Copy has a manual-selection fallback if clipboard access is unavailable. WhatsApp uses the response's phone number and opens a composed `wa.me` link; it never sends automatically. A new link invalidates earlier links on the backend.
+- `approve` from Requested; note optional.
+- `reject` from Requested or Approved; private reason and campaigner-visible message required.
+- `mark_paid` from Approved; transfer reference optional.
 
-## Errors and privacy
+The UI consumes the returned reference/status immediately, then reloads the filtered queue. It does not assume a full row is returned by an action. Server errors remain visible with retry; there is no “endpoint unavailable” fallback. The label is **Demo: no real money moves**. These are persisted server requests/statuses; marking paid makes no bank transfer.
 
-Backend `{ error: { code, message, fields } }` messages appear in error banners. Field errors map to login, verification, decision, publication and offer-status controls. Publication errors are also retained on the underlying form so the admin can close the dialog and correct them. Errors use a border plus ⚠ text. Phone numbers remain masked in lists and full in private detail dialogs. Filenames are displayed without inventing a secure download URL that the backend does not provide.
+## Review, account links and errors
 
-Withdrawals remain visibly labelled Demo: status changes must not imply a real bank transfer.
+Opening Received transitions it to In review on the backend. Save verification as Verified before approval. Verification locks after Approved/Published/Rejected. More info requested must be marked received before approval. Approval and publication remain separate; publication fields start empty, require both consent boxes and have their own confirmation dialog.
 
-## Current backend dependency
+Approve's optional account and resend's direct account object contain `state`, `email`, `phone`, nullable `activationLink`, nullable `expiresAt`, nullable `emailSent`. Links stay in the current detail view's memory, never logs or sessionStorage. Copy includes manual-selection recovery; WhatsApp opens a composed link without sending automatically. A successful demo email is described as sent to MailHog, not the applicant's real inbox. Already-activated accounts with no new link and null emailSent are handled.
 
-At integration time, this checkout contains `AdminApplicationsController`, `AdminInboxController`, and `AuthController`, but **no `AdminWithdrawalsController` or withdrawal DTOs**. The Withdrawals tab now calls the requested live URLs rather than using mock data. It shows the server error (or an endpoint-unavailable message for an empty 404). Its existing row/action UI is ready for the requested contract, but those response shapes cannot yet be checked against C# and the server must supply these routes. No backend files were changed.
+All error banners use the server's `{ error: { message, fields } }`. Field errors map to relevant inputs; non-JSON HTTP failures get plain retry wording rather than axios's generic status-code message. Phone numbers remain masked in lists and full in private detail views. Successful decisions retain their returned status/link even if a follow-up refresh fails.
 
-## Validation
+## Endpoints not supplied by the backend
 
-Run `npm run build`. No tests were added or run. Nothing was pushed, merged or deployed.
+The reviewed controllers do not provide evidence upload or secure evidence download routes. The admin displays filenames without inventing document links. There are no campaign-update or outreach-creation admin endpoints/UI. All existing admin screens are live.
+
+## Verification
+
+Use `npm run build`. No tests were created or run. No backend, design, root, Caddyfile or Dockerfile edits; no push, merge or deployment.

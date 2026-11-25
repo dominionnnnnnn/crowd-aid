@@ -1,4 +1,4 @@
-import { useId, useState } from "react";
+import { useId, useRef, useState } from "react";
 import { Link } from "react-router-dom";
 const items = [
   [
@@ -70,7 +70,20 @@ function Answer({ text }) {
 }
 export default function FAQ() {
   const [open, setOpen] = useState(null);
+  const [showAll, setShowAll] = useState(false);
+  const headingRef = useRef(null);
   const id = useId();
+  function toggleAll() {
+    if (showAll) {
+      if (open !== null && open >= 3) setOpen(null);
+      setShowAll(false);
+      requestAnimationFrame(() =>
+        headingRef.current?.scrollIntoView({ block: "start" }),
+      );
+    } else {
+      setShowAll(true);
+    }
+  }
   return (
     <section
       className="p-container p-section p-faq"
@@ -78,43 +91,56 @@ export default function FAQ() {
     >
       <div className="p-faq-heading">
         <p className="p-eyebrow">A little clarity</p>
-        <h2 id={`${id}-heading`}>Frequently asked questions</h2>
+        <h2 ref={headingRef} id={`${id}-heading`}>
+          Frequently asked questions
+        </h2>
       </div>
-      <div className="p-faq-list">
-        {items.map(([question, answer], index) => {
-          const expanded = open === index;
-          return (
-            <div
-              className={`p-faq-item ${expanded ? "is-open" : ""}`}
-              key={question}
-            >
-              <h3>
-                <button
-                  id={`${id}-question-${index}`}
-                  aria-expanded={expanded}
-                  aria-controls={`${id}-answer-${index}`}
-                  onClick={() => setOpen(expanded ? null : index)}
-                >
-                  <span>{question}</span>
-                  <span className="p-faq-toggle" aria-hidden="true">
-                    {expanded ? "−" : "+"}
-                  </span>
-                </button>
-              </h3>
+      <div id={`${id}-list`} className="p-faq-list">
+        {items
+          .slice(0, showAll ? items.length : 3)
+          .map(([question, answer], index) => {
+            const expanded = open === index;
+            return (
               <div
-                id={`${id}-answer-${index}`}
-                role="region"
-                aria-labelledby={`${id}-question-${index}`}
-                hidden={!expanded}
+                className={`p-faq-item ${expanded ? "is-open" : ""}`}
+                key={question}
               >
-                <p>
-                  <Answer text={answer} />
-                </p>
+                <h3>
+                  <button
+                    id={`${id}-question-${index}`}
+                    aria-expanded={expanded}
+                    aria-controls={`${id}-answer-${index}`}
+                    onClick={() => setOpen(expanded ? null : index)}
+                  >
+                    <span>{question}</span>
+                    <span className="p-faq-toggle" aria-hidden="true">
+                      {expanded ? "−" : "+"}
+                    </span>
+                  </button>
+                </h3>
+                <div
+                  id={`${id}-answer-${index}`}
+                  role="region"
+                  aria-labelledby={`${id}-question-${index}`}
+                  hidden={!expanded}
+                >
+                  <p>
+                    <Answer text={answer} />
+                  </p>
+                </div>
               </div>
-            </div>
-          );
-        })}
+            );
+          })}
       </div>
+      <button
+        type="button"
+        className="button p-outline"
+        aria-expanded={showAll}
+        aria-controls={`${id}-list`}
+        onClick={toggleAll}
+      >
+        {showAll ? "Show less" : "Read more"}
+      </button>
     </section>
   );
 }

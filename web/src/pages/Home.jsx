@@ -1,8 +1,7 @@
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import { Link, useLocation } from "react-router-dom";
 import { publicApi } from "../api/public";
 import { useResource } from "../components/hooks";
-import { usePublic } from "../components/PublicLayout";
 import HeroCommunity from "../components/HeroCommunity";
 import FAQ from "../components/FAQ";
 import {
@@ -13,7 +12,7 @@ import {
   Loading,
 } from "../components/UI";
 export default function Home() {
-  const { giveOpen, setGiveOpen } = usePublic();
+  const [giveOpen, setGiveOpen] = useState(false);
   const location = useLocation();
   const resource = useResource(
     (signal) => publicApi.campaigns({ featured: true }, signal),
@@ -39,7 +38,7 @@ export default function Home() {
                 Get help
               </Link>
               <button
-                className="button p-primary"
+                className="button p-outline"
                 aria-expanded={giveOpen}
                 aria-controls="give-help-panel"
                 onClick={() => setGiveOpen((v) => !v)}
