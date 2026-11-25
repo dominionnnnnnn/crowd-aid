@@ -1,0 +1,5 @@
+# Keep shell scripts with Unix line endings, otherwise Windows git breaks them on the server
+# ("bad interpreter: \r").
+*.sh text eol=lf
+Dockerfile* text eol=lf
+Caddyfile text eol=lf

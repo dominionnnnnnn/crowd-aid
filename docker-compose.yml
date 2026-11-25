@@ -1,0 +1,63 @@
+# DEV — run on your laptop:  docker compose up --build
+#   React (hot reload) -> http://localhost:5173
+#   API                -> http://localhost:5159/api/health
+#   MailHog inbox      -> http://localhost:8025   (every email the API sends lands here)
+#   Postgres           -> localhost:5433 (for DBeaver/pgAdmin)
+services:
+
+  db:
+    image: postgres:17
+    environment:
+      - POSTGRES_USER=${POSTGRES_USER:-crowdaid}
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD:-crowdaid}
+      - POSTGRES_DB=${POSTGRES_DB:-crowdaid_db}
+    ports:
+      - "5433:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  mailhog:
+    image: mailhog/mailhog:v1.0.1
+    ports:
+      - "8025:8025"          # web inbox; SMTP (1025) stays inside Docker
+
+  api:
+    build: ./api
+    ports:
+      - "5159:8080"
+    environment:
+      - ASPNETCORE_ENVIRONMENT=Development
+      - ConnectionStrings__Default=Host=db;Port=5432;Database=${POSTGRES_DB:-crowdaid_db};Username=${POSTGRES_USER:-crowdaid};Password=${POSTGRES_PASSWORD:-crowdaid}
+      - CORS_ORIGINS=http://localhost:5173
+      - Smtp__Host=mailhog
+      - Smtp__Port=1025
+      - Smtp__From=CrowdAid <no-reply@crowdaid.demo>
+      - App__BaseUrl=http://localhost:5173       # used to build activation links in emails
+      - Jwt__Secret=dev-only-secret-change-me-0123456789abcdef
+    depends_on:
+      db:
+        condition: service_healthy
+      mailhog:
+        condition: service_started
+
+  web:
+    build:
+      context: ./web
+      dockerfile: Dockerfile.dev
+    ports:
+      - "5173:5173"
+    volumes:
+      - ./web:/usr/src/app
+      - /usr/src/app/node_modules
+    environment:
+      - API_PROXY_TARGET=http://api:8080
+    depends_on:
+      - api
+
+volumes:
+  postgres_data:

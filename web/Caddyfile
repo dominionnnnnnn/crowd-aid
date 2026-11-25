@@ -1,0 +1,25 @@
+# DOMAIN comes from .env:
+#   DOMAIN=:80                 -> plain HTTP on the server IP (quick test)
+#   DOMAIN=todo.example.com    -> automatic HTTPS (Let's Encrypt), HTTP redirected to HTTPS
+{$DOMAIN::80} {
+	encode gzip
+
+	# API -> ASP.NET Core container (never exposed directly to the internet)
+	handle /api/* {
+		reverse_proxy api:8080
+	}
+
+	# React SPA (fallback to index.html so client-side routes work on refresh)
+	handle {
+		root * /srv
+		try_files {path} /index.html
+		file_server
+	}
+
+	header {
+		X-Content-Type-Options nosniff
+		X-Frame-Options DENY
+		Referrer-Policy strict-origin-when-cross-origin
+		-Server
+	}
+}

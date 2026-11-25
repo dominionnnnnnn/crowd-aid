@@ -1,0 +1,65 @@
+# PROD — run on the VPS:  bash deploy.sh   (or: docker compose -f docker-compose.prod.yml up -d --build)
+# Public: only Caddy (80/443).
+# Private: API, Postgres and MailHog have NO public ports.
+# MailHog's inbox is bound to the server's localhost only; open it through an SSH tunnel
+# (see README "MailHog on the server"), because it shows activation links.
+services:
+
+  db:
+    image: postgres:17
+    env_file: .env
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    restart: unless-stopped
+
+  mailhog:
+    image: mailhog/mailhog:v1.0.1
+    ports:
+      - "127.0.0.1:8025:8025"   # localhost only: NOT reachable from the internet
+    restart: unless-stopped
+
+  api:
+    build: ./api
+    expose:
+      - "8080"
+    environment:
+      - ASPNETCORE_ENVIRONMENT=Production
+      - ConnectionStrings__Default=Host=db;Port=5432;Database=${POSTGRES_DB};Username=${POSTGRES_USER};Password=${POSTGRES_PASSWORD}
+      - Smtp__Host=mailhog
+      - Smtp__Port=1025
+      - Smtp__From=CrowdAid <no-reply@crowdaid.demo>
+      - App__BaseUrl=${PUBLIC_URL}
+      - Jwt__Secret=${JWT_SECRET}
+      - Admin__Email=${ADMIN_EMAIL}
+      - Admin__Password=${ADMIN_PASSWORD}
+    depends_on:
+      db:
+        condition: service_healthy
+      mailhog:
+        condition: service_started
+    restart: unless-stopped
+
+  web:
+    build: ./web
+    ports:
+      - "80:80"
+      - "443:443"
+      - "443:443/udp"
+    environment:
+      - DOMAIN=${DOMAIN:-:80}
+    volumes:
+      - caddy_data:/data
+      - caddy_config:/config
+    depends_on:
+      - api
+    restart: unless-stopped
+
+volumes:
+  postgres_data:
+  caddy_data:
+  caddy_config:
