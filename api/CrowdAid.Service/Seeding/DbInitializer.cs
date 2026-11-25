@@ -76,7 +76,7 @@ public static class DbInitializer
         {
             Id = "o1",
             Title = "Community fundraising outreach",
-            Date = new DateOnly(2026, 12, 5),
+            Date = new DateOnly(2026, 11, 28),
             Time = "9:00am – 1:00pm",
             Venue = "Meeting point shared after you register",
         });
