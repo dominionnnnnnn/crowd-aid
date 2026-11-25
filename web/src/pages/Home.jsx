@@ -1,5 +1,4 @@
-import { useEffect, useState } from "react";
-import { Link, useLocation } from "react-router-dom";
+import { Link } from "react-router-dom";
 import { publicApi } from "../api/public";
 import { useResource } from "../components/hooks";
 import HeroCommunity from "../components/HeroCommunity";
@@ -12,15 +11,10 @@ import {
   Loading,
 } from "../components/UI";
 export default function Home() {
-  const [giveOpen, setGiveOpen] = useState(false);
-  const location = useLocation();
   const resource = useResource(
     (signal) => publicApi.campaigns({ featured: true }, signal),
     [],
   );
-  useEffect(() => {
-    if (location.pathname === "/give") setGiveOpen(true);
-  }, [location.pathname, setGiveOpen]);
   return (
     <>
       <section className="p-hero">
@@ -37,59 +31,52 @@ export default function Home() {
               <Link className="button p-primary" to="/apply">
                 Get help
               </Link>
-              <button
-                className="button p-outline"
-                aria-expanded={giveOpen}
-                aria-controls="give-help-panel"
-                onClick={() => setGiveOpen((v) => !v)}
-              >
-                Give help {giveOpen ? "−" : "+"}
-              </button>
+              <Link className="button p-outline" to="/campaigns">
+                Give help
+              </Link>
               <span>For yourself or someone you care for</span>
               <span>Donate, offer practical help or volunteer</span>
             </div>
           </div>
           <HeroCommunity />
-          {giveOpen && (
-            <div
-              id="give-help-panel"
-              role="region"
-              aria-label="Ways to give help"
-              className="p-give-grid"
-            >
-              {[
-                [
-                  "/campaigns",
-                  "donate",
-                  "Donate to a campaign",
-                  "Give money towards someone's treatment",
-                ],
-                [
-                  "/help",
-                  "transport",
-                  "Offer practical assistance",
-                  "Transport, meals, blood donation, equipment or skills",
-                ],
-                [
-                  "/volunteer",
-                  "volunteer",
-                  "Volunteer with CrowdAid",
-                  "Join outreaches and community fundraising",
-                ],
-              ].map(([to, icon, title, copy]) => (
-                <Link to={to} className="p-help-link" key={to}>
-                  <span className="p-icon-tile">
-                    <Icon name={icon} />
-                  </span>
-                  <span>
-                    <strong>{title}</strong>
-                    <small>{copy}</small>
-                  </span>
-                  <span aria-hidden="true">›</span>
-                </Link>
-              ))}
-            </div>
-          )}
+          <div
+            id="give-help-panel"
+            role="region"
+            aria-label="Ways to give help"
+            className="p-give-grid"
+          >
+            {[
+              [
+                "/campaigns",
+                "donate",
+                "Donate to a campaign",
+                "Give money towards someone's treatment",
+              ],
+              [
+                "/help",
+                "transport",
+                "Offer practical assistance",
+                "Transport, meals, blood donation, equipment or skills",
+              ],
+              [
+                "/volunteer",
+                "volunteer",
+                "Volunteer with CrowdAid",
+                "Join outreaches and community fundraising",
+              ],
+            ].map(([to, icon, title, copy]) => (
+              <Link to={to} className="p-help-link" key={to}>
+                <span className="p-icon-tile">
+                  <Icon name={icon} />
+                </span>
+                <span>
+                  <strong>{title}</strong>
+                  <small>{copy}</small>
+                </span>
+                <span aria-hidden="true">›</span>
+              </Link>
+            ))}
+          </div>
         </div>
       </section>
       <section className="p-container p-section p-stack">

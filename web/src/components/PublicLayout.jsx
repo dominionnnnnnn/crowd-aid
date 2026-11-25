@@ -93,7 +93,6 @@ export default function PublicLayout() {
               <Link className="button p-primary" to="/apply">
                 Get help
               </Link>
-              <NavLink to="/campaigns">Give help</NavLink>
               {signedIn ? (
                 <>
                   <NavLink to="/dashboard">Dashboard</NavLink>
@@ -171,9 +170,6 @@ export default function PublicLayout() {
               >
                 Get help
               </Link>
-              <NavLink to="/campaigns" onClick={closeMenu}>
-                Give help
-              </NavLink>
               <Link to="/help" onClick={closeMenu}>
                 Offer practical help
               </Link>
