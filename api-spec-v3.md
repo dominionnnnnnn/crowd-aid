@@ -1,4 +1,4 @@
-# CrowdAid MVP: API spec for the frontend (v3, 25 Nov 2026)
+# CrowdAid MVP: API spec for the frontend (v3, 25 Nov 2026, revised 12:20)
 
 Matched to **CrowdAid Prototype v2** (Design System artifact) and Handoff v2. Replaces api-spec-v1, which was based on the wireframes only. This is a design contract only. Write all code fresh on hackathon day in the new repo.
 
@@ -18,13 +18,17 @@ Matched to **CrowdAid Prototype v2** (Design System artifact) and Handoff v2. Re
 6. **Admin: withdrawals queue and activation resend** (§5d).
 7. Optional **application status check** by reference + email (#34), because applicants have no account until they are approved.
 8. Small corrections to v2 are listed in §10.
+9. **Revised 12:00 — real test payments.** Donations now go through **Paystack test mode** (initialize → checkout → verify + webhook). The demo outcome selector is removed. New public endpoint #35 `POST /webhooks/paystack`.
+10. **Revised 12:00 — fresh start.** No seeded campaigns, applications, donations or totals. Everything is created live through apply → approve → publish and real test payments. Only the admin account and outreach events are seeded (§7).
+11. **Revised 12:00 — review fixes:** activation link check moved to a POST so the token never appears in URLs or logs (#23); one rule for which campaign `/me/*` uses; activation email sent after the approval commits; JWT sample dates; storage note covers campaigners.
+12. **Revised 12:20 — integrations:** Paystack test-mode config (§11) and the activation email via the repo's MailHog container (§5, approve). HTTPS via nip.io as in HACKATHON-PLAN §6D (§10.8).
 
 ---
 
 ## 0. Where the prototype differs from wireframe v0.4.1 (decide before kickoff)
 
 1. **Processing fee.** v0.4.1 showed a demo ₦75 processing fee (total ₦5,075). Prototype v2 shows ₦0 platform fee and **no processing fee** (total = donation). This spec follows v2: `total = amount`.
-2. **Payment method** (Card / Bank transfer / USSD) is now a required choice. In demo mode it is recorded only. No card details are collected.
+2. **Payment method** (Card / Bank transfer / USSD) is a required choice. It is passed to Paystack as `channels` (§#5). CrowdAid never sees or stores card details; Paystack's checkout collects them.
 3. **Minimum donation** is ₦500 in v2 (it was open).
 4. **New in v2:** Contact CrowdAid dialog with an admin Messages tab, a "volunteer community" signup next to outreach registration, admin statuses for offers, and a separate verification status on applications.
 5. **Priority:** Handoff v2 marks Volunteer and Admin as P1, but the wireframes had all 8 pages as P0. This spec keeps the admin approve → publish flow as P0 because it proves the review-before-publish story to judges.
@@ -81,7 +85,7 @@ Status codes: `400` validation, `401` not signed in or token invalid/expired, `4
 | 20 | GET | `/admin/volunteers` | Volunteers tab | **Yes** (admin) | P0 |
 | 21 | GET | `/admin/messages` | Messages tab | **Yes** (admin) | P1 |
 | 22 | POST | `/auth/login` | Campaigner sign-in (NEW) | No (returns the token) | P0 |
-| 23 | GET | `/auth/activation/:token` | Activation page: check link (NEW) | No (public) | P0 |
+| 23 | POST | `/auth/activation/check` | Activation page: check link (NEW, revised) | No (public) | P0 |
 | 24 | POST | `/auth/activate` | Activation page: set password (NEW) | No (returns the token) | P0 |
 | 25 | GET | `/auth/me` | Restore session (NEW) | **Yes** (any role) | P0 |
 | 26 | GET | `/me/campaign` | Dashboard overview (NEW) | **Yes** (campaigner) | P0 |
@@ -93,14 +97,15 @@ Status codes: `400` validation, `401` not signed in or token invalid/expired, `4
 | 32 | POST | `/admin/withdrawals/:ref/actions` | Approve / reject / mark paid (NEW) | **Yes** (admin) | P1 |
 | 33 | POST | `/admin/applications/:ref/activation` | Resend or reset activation link (NEW) | **Yes** (admin) | P1 |
 | 34 | GET | `/applications/status` | Track my application (NEW) | No (public) | P1 |
+| 35 | POST | `/webhooks/paystack` | Paystack payment events (NEW, revised) | No (Paystack signature instead) | P0 |
 
-**Summary (CHANGED):** the public endpoints (1–11, 23, 24, 34) and both sign-ins (12, 22) need no token. Campaigner endpoints (26–30) need a `campaigner` token. Admin endpoints (13–21, 31–33) need an `admin` token. #25 accepts either.
+**Summary (CHANGED):** the public endpoints (1–11, 23, 24, 34) and both sign-ins (12, 22) need no token. #35 needs no token but **must** pass the Paystack signature check. Campaigner endpoints (26–30) need a `campaigner` token. Admin endpoints (13–21, 31–33) need an `admin` token. #25 accepts either.
 
 Two public endpoints need care without a login:
 - **#4 upload (P1):** `POST /applications` should also return a one-time `uploadToken`, and #4 accepts files only with that token, so nobody can attach files to someone else's reference.
 - **#6 donation status:** return only reference, amount, status and campaign title. Never the donor's email or name.
 
-Campaign updates and outreach events are **seeded** (no admin screens to create them).
+Outreach events are **seeded** (no admin screen to create them). Campaign updates have no create screen; the section stays hidden when empty (§7).
 
 ---
 
@@ -238,9 +243,10 @@ Response `201`:
 `multipart/form-data`, `files[]`. JPG/PNG/PDF, max 5 (drawn). Size limit OPEN.
 Response: `{ "files": ["treatment_estimate.pdf"] }`. If not built, hide the upload box and say documents may be requested privately.
 
-### 5. POST `/donations`
-Demo mode: the prototype has a **demo outcome selector** (Success / Pending / Failed). Send the chosen outcome with the donation, so one call does it all.
+### 5. POST `/donations` (REVISED: Paystack test mode)
+Starts a payment. CrowdAid never handles card details.
 
+Request:
 ```json
 {
   "campaignId": "usman",
@@ -248,35 +254,56 @@ Demo mode: the prototype has a **demo outcome selector** (Success / Pending / Fa
   "name": "optional",
   "anonymous": false,
   "email": "you@example.com",
-  "method": "card | transfer | ussd",
-  "demoOutcome": "success | pending | failed"
+  "method": "card | transfer | ussd"
 }
 ```
 Validation (CONFIRMED): `amount` is a whole number ≥ 500, `email` is required and valid, `method` is required. Campaign must be published.
+
+Server steps:
+1. Save a Donation row: status `pending`, reference `CA-DON-0012` (from a DB sequence, not a row count).
+2. Call Paystack `POST https://api.paystack.co/transaction/initialize` **from the server** with `email`, `amount: amount * 100` (kobo), `currency: "NGN"`, `reference: "CA-DON-0012"`, `callback_url: "https://<site>/donate/result?ref=CA-DON-0012"`, `channels` (card → `card`, transfer → `bank_transfer`, ussd → `ussd`), `metadata: { campaignId }`.
+3. If Paystack errors, set the row to `failed` and return `502 PAYMENT_START_FAILED` (frontend shows the failure panel, answers kept).
 
 Response `201`:
 ```json
 {
   "reference": "CA-DON-0012",
-  "campaignId": "usman",
-  "campaignTitle": "Help Usman get kidney surgery",
+  "authorizationUrl": "https://checkout.paystack.com/...",
+  "accessCode": "...",
   "amount": 5000,
   "platformFee": 0,
   "total": 5000,
-  "method": "card",
-  "status": "success | pending | failed",
-  "demo": true,
-  "campaign": { "raised": 3005000, "goal": 5000000, "supporters": 13 }
+  "status": "pending",
+  "testMode": true
 }
 ```
-- `success`: add `amount` to `raised` and +1 to `supporters`. Return the new totals so the success screen and campaign page show the update (the prototype's "raised total updates" behaviour).
-- `pending` / `failed`: totals unchanged. Failed → frontend offers retry with answers kept.
-- Frontend shows the "Processing…" state for ~1–2 seconds before showing the result. No server delay needed.
-- `demoOutcome` is accepted only while `DEMO_PAYMENTS=true`. With a real provider (P1), drop it and use the provider's hosted checkout + webhook to set the status.
-- Anonymous donors: never show the name publicly.
+- Frontend redirects to `authorizationUrl`, or opens the Paystack Popup with `accessCode` and the **public** key.
+- Keys: `PAYSTACK_SECRET_KEY` (sk_test_…) on the server only, never in frontend code. `PAYSTACK_PUBLIC_KEY` (pk_test_…) may go to the frontend.
+- Label every donation and result screen "Test payment — no real money is charged" (project rule: never present test payments as real).
+- For the live demo, use **card** with Paystack's documented test cards. Transfer and USSD are less predictable in test mode.
 
-### 6. GET `/donations/:ref`
-Returns the same shape as #5 (without `campaign` totals). Used for "Waiting for confirmation" rechecks. In demo mode a pending donation stays pending.
+### 6. GET `/donations/:ref` (REVISED)
+Called by the result page when the donor returns from Paystack (`callback_url`), and to recheck "Waiting for confirmation".
+- If the row is still `pending`, the server calls Paystack `GET /transaction/verify/:reference`, then applies the **confirm rule** below.
+- Never show success just because the donor came back; only after server-side verification.
+- Response: `{ reference, campaignId, campaignTitle, amount, status, testMode, campaign: { raised, goal, supporters } }`. No donor name or email.
+
+Status mapping to the three result screens:
+
+| Paystack status | CrowdAid status | Screen |
+|---|---|---|
+| `success` | success | Thank you for your support |
+| `ongoing`, `pending`, `processing`, `queued` | pending | Waiting for confirmation |
+| `failed`, `abandoned`, `reversed` | failed | The payment didn't go through (retry keeps answers) |
+
+**Confirm rule (used by #6 and #35, the most important rule):**
+In one DB transaction: update the donation to `success` **only if it is not already `success`**, and only if Paystack's `amount` equals `amount * 100` and `currency` is `NGN`. Add `amount` to the campaign's `raised` and 1 to `supporters` **only when that update actually changed a row**. The verify call and the webhook both fire for the same payment, so without this every donation counts twice.
+
+### 35. POST `/webhooks/paystack` (NEW, public, no JWT)
+- Read the **raw** body. Verify the signature **before** parsing: classic header `x-paystack-signature` = hex HMAC-SHA512 of the raw body keyed with `PAYSTACK_SECRET_KEY`. Paystack's docs (Nov 2026) also describe a newer `Paystack-Signature` header with a separate `whsec_` secret; check which header your test deliveries carry and verify that one. Bad signature → `401`.
+- Handle `charge.success`: find the donation by `data.reference`, apply the confirm rule. Ignore other events.
+- Reply `200` quickly, also for events you ignore and donations already confirmed.
+- Set the webhook URL in the Paystack **test** dashboard after deploy: `https://<SERVER_IP>.nip.io/api/v1/webhooks/paystack` (§11). It must be public HTTPS (see §10.8). Locally, or on plain HTTP, skip the webhook: #6's verify-on-return is enough.
 
 ### 7. POST `/practical-help-offers`
 `campaignId` present = campaign mode. Absent or `null` = general mode.
@@ -398,8 +425,8 @@ See **§5a Authentication (JWT)** for the full rules.
   "role": "admin | campaigner",
   "iss": "crowdaid-api",
   "aud": "crowdaid-api",
-  "iat": 1764064800,
-  "exp": 1764093600
+  "iat": 1795597200,
+  "exp": 1795626000
 }
 ```
 - **CHANGED:** one audience (`crowdaid-api`) for both roles; the `role` claim decides access. A campaigner token carries the user id only, never a campaign id.
@@ -415,12 +442,12 @@ See **§5a Authentication (JWT)** for the full rules.
 2. Verify signature, `exp`, `iss` and `aud`. Any failure → `401 UNAUTHENTICATED` (expired tokens can use `TOKEN_EXPIRED` so the UI can say "Your session expired").
 3. Check the role the route group needs (`admin` for `/admin/*`, `campaigner` for `/me/*`). Otherwise → `403 FORBIDDEN`.
 4. Attach `{ id, name }` to the request. The application log uses this for "by" (e.g. "Approved · CrowdAid Admin · 10:42").
-5. **(NEW)** For `/me/*`, load the campaigner's own application and campaign from the user id in the token. **Never** take a campaign id or reference from the URL or body on these routes, so one campaigner can't read another's data.
+5. **(NEW)** For `/me/*`, load the campaigner's own application and campaign from the user id in the token. **Rule (revised):** if a user has more than one application, use the most recently approved one (latest `Approved`/`Published`). **Never** take a campaign id or reference from the URL or body on these routes, so one campaigner can't read another's data.
 
 Most stacks have this built in: ASP.NET Core `JwtBearer` + `[Authorize(Roles = "admin")]`, or `jsonwebtoken` + a small Express middleware in Node. Pick whichever your backend dev writes fastest.
 
 **Frontend handling.**
-- On login, keep the token **in memory** (app state), and optionally in `sessionStorage` so a page refresh during the demo doesn't log the admin out. Avoid `localStorage` (it survives closing the browser).
+- On login (admin or campaigner), keep the token **in memory** (app state), and optionally in `sessionStorage` so a page refresh during the demo doesn't sign the user out. Avoid `localStorage` (it survives closing the browser).
 - Send `Authorization: Bearer <token>` on every `/admin/*` and `/me/*` call from one shared API helper.
 - On any `401`: clear the token and show the matching sign-in again (the admin gate on `/admin`, `/login` for campaigners), with "Your session expired. Sign in again." if the code is `TOKEN_EXPIRED`.
 - "Sign out" just clears the token client-side. No server endpoint needed for the MVP.
@@ -493,12 +520,21 @@ One endpoint for the four confirmation dialogs.
 - Not allowed from the current status → `409`.
 - Approving does **not** publish. CONFIRMED.
 
-**What `approve` does now (NEW, all in one transaction):**
+**What `approve` does now (NEW; steps 1–4 in one transaction, step 5 after it commits):**
 1. Status becomes `Approved` and a log entry is written (same as v2).
 2. Look for a user with `application.email` (case-insensitive). If none, create a `campaigner` user with **no password yet**. If one exists, reuse it and do **not** create a second account.
 3. Link the application to that user (`application.userId`). The campaign created later by Publish is owned by that user.
 4. If the user has no password yet, create an **activation token**: 32 random bytes, URL-safe. Store only its **SHA-256 hash**. It expires in 72 hours and works once.
-5. If `EMAIL_ENABLED=true`, email the link to `application.email`. If sending fails, the approval still succeeds and `emailSent` is `false`.
+5. **After the transaction commits**, if `EMAIL_ENABLED=true`, email the link to `application.email`. Never send email inside the transaction. If sending fails, the approval still stands and `emailSent` is `false`.
+
+**Demo email (revised 12:20, no email provider — matches the repo's MailHog setup):** the activation email is sent over normal SMTP to the **MailHog** container already in `docker-compose.prod.yml` (`mailhog/mailhog:v1.0.1`). MailHog catches every message and never delivers it; the email shows up in MailHog's web inbox.
+- Config (already in `docker-compose.prod.yml`): `Smtp__Host=mailhog`, `Smtp__Port=1025`, `Smtp__From=CrowdAid <no-reply@crowdaid.demo>`, no username or password, no SSL. The link uses `App__BaseUrl` (`PUBLIC_URL` in `.env`): `{App__BaseUrl}/activate?token=...`.
+- Send with the same `SmtpClient` code as the scaffold's `/test-email` endpoint (reuse it in an email service; then delete `/test-email`, as its comment says).
+- Email content: subject "Set up your CrowdAid account"; greeting by name; one line that application `CA-REQ-xxxx` was approved; the activation button and the plain link; "This link works once and expires in 72 hours"; footer "Demo email: sent to the CrowdAid demo inbox, not delivered".
+- **Keep the inbox private.** It shows working activation links. The compose file already binds port 8025 to the server's localhost only; open it on the demo laptop through an SSH tunnel (`ssh -L 8025:localhost:8025 <user>@<server>`, then http://localhost:8025). Never publish 8025.
+- `emailSent` in the approve response = the SMTP send to MailHog succeeded.
+- Moving to a real provider later only changes the `Smtp__*` settings. No code change.
+- The admin's Copy link / WhatsApp fallback stays as a backup.
 
 Response `200`:
 ```json
@@ -571,8 +607,12 @@ Response `200`:
 - Errors: `400` missing fields; `401 INVALID_CREDENTIALS` with the same generic message as #12. A user who hasn't activated yet gets the same `401`, so the response never reveals that the account exists.
 - Admins keep using #12. A campaigner token can't call `/admin/*`.
 
-#### 23. GET `/auth/activation/:token`
-Called when the link is opened, before the set-password form is shown. It does **not** use up the token.
+#### 23. POST `/auth/activation/check` (REVISED)
+Called when the activation page opens, before the set-password form is shown. It does **not** use up the token.
+- The link is `https://<site>/activate?token=...`. The frontend reads the token from the query string, **removes it from the address bar** (`history.replaceState`), and sends it in the body: `{ "token": "..." }`. A POST body keeps the token out of server and Caddy access logs (it would be logged if it were in the API path).
+- Serve the activation page with `Referrer-Policy: no-referrer` so the token isn't leaked to other sites.
+
+Response `200`:
 ```json
 { "valid": true, "name": "Aminat Yusuf", "emailMasked": "a•••@example.com", "applicationRef": "CA-REQ-0007", "patientName": "Usman" }
 ```
@@ -689,7 +729,7 @@ Creates a **new** activation link and invalidates all earlier ones. Use it when 
 - **Application**: ref, who, name, phone, email (NEW, required), userId (NEW, set on approve), relationship, patientName, patientAge, town, lga, condition, treatment, facility, estimatedCost, amountNeeded, supportTypes (JSON), privateReviewConsent, accuracyConfirmed, status, verificationStatus, verificationMethod, publication (JSON), campaignId, receivedAt
 - **ApplicationLog**: id, applicationRef, action, note, reason, message, by, at
 - **ApplicationFile** (P1): id, applicationRef, fileName, storageKey
-- **Donation**: ref, campaignId, amount, platformFee, total, name, anonymous, email, method, status, demo, createdAt
+- **Donation**: ref (also the Paystack reference), campaignId, amount, platformFee, total, name, anonymous, email, method, status (`pending | success | failed`), gatewayStatus (Paystack's raw status), paidAt, testMode, createdAt
 - **Offer**: ref, campaignId (nullable), types (JSON), details, availability (JSON), area, name, phone, status, createdAt
 - **Outreach**: id, title, date, time, venue, campaignId
 - **Volunteer**: ref, kind, outreachId (nullable), name, phone, email, area, roles/interests (JSON), stay, availability (JSON), createdAt
@@ -700,31 +740,37 @@ Creates a **new** activation link and invalidates all earlier ones. Use it when 
 - **Withdrawal** (NEW): ref, userId, campaignId, amount, status, note, reason, demo, requestedAt, decidedBy, decidedAt, paidAt
 - **WithdrawalLog** (NEW): id, withdrawalRef, action, by, at, note
 
-## 7. Seed data (fictional demo data, as in the prototype)
-- Campaigns: `usman` (₦3,000,000 of ₦5,000,000, 12 supporters, 2 updates), `ronke` (cataract surgery, Sagamu), `daniel`, `tobi`. Copy text and figures from Prototype v2 so the app matches the design.
-- Applications: CA-REQ-0001 to 0006 in mixed statuses (Published, In review with evidence, Received, etc.), matching the prototype.
-- Offers CA-OFF-0001/0002, volunteers CA-VOL-0001/0002, outreach `o1` (Sat 28 Nov 2026).
-- One admin and one campaigner (CHANGED): Aminat Yusuf (`aminat@crowdaid.demo`, already activated) who owns `usman`, so the dashboard demo works without running the whole approval flow. Add fictional payout details and two withdrawals: one `Paid` ₦500,000 and one `Requested` ₦300,000, so `available` isn't the full raised amount. Every seeded application gets a fictional email, because email is now required. Keep demo passwords in the team's private notes, not in the repo.
-- Mark all seeds as demo; never present them as real cases or real money.
+## 7. Seed data (REVISED: fresh start)
+- **No** seeded campaigns, applications, donations, offers, volunteers or totals. Every campaign starts at ₦0 and grows only from confirmed Paystack test payments.
+- Seed only what has no admin screen to create it:
+  - One admin account (password in the team's private notes, not the repo).
+  - Outreach events (there is no create-outreach screen). Without them the Volunteer page shows "No upcoming outreaches". Use clearly fictional details.
+- Campaign updates have no create screen either. With none seeded, the "Campaign updates" section is hidden (the prototype already hides it when empty).
+- **Before judging**, on the deployed site: submit 2–3 fictional applications, verify → approve → publish them, mark one `featured`, and make a few test donations so progress bars aren't all 0%. Activate one campaigner account so the dashboard has data.
+- Usman's ₦3,000,000 / ₦5,000,000 figures stay on the pitch slides only, labelled fictional.
 
 ## 8. Build order for the day
 1. Seed + `GET /campaigns`, `GET /campaigns/:id` → frontend unblocked.
-2. `POST /donations` with demoOutcome → the demo's money moment (raised total updates).
+2. Paystack test mode: `POST /donations` (initialize) → `GET /donations/:ref` (verify + confirm rule) → `POST /webhooks/paystack` once deployed. This is the demo's money moment (raised total updates).
 3. `POST /applications`.
 4. Admin: JWT login + auth middleware → list → detail → verification → actions → publish (new campaign appears in listing — the best live demo beat).
-5. **(NEW) Accounts and dashboard:** approve creates the user + activation link → `GET /auth/activation/:token` → `POST /auth/activate` → `POST /auth/login` → `GET /auth/me` → `GET /me/campaign` and `/me/campaign/donations`.
+5. **(NEW) Accounts and dashboard:** approve creates the user + activation link → `POST /auth/activation/check` → `POST /auth/activate` → `POST /auth/login` → `GET /auth/me` → `GET /me/campaign` and `/me/campaign/donations`.
 6. Offers + outreach + volunteer registration (simple inserts) + admin read tabs.
 7. **(NEW, P1)** `/me/campaign/offers`, payout, withdrawals + the admin withdrawals tab, activation resend, application status check, sending the activation email.
-8. P1 if time: community volunteers, contact messages + Messages tab, offer status, uploads, real payment test mode.
+8. P1 if time: community volunteers, contact messages + Messages tab, offer status, uploads.
 
 **Cut first if behind:** withdrawals → application status check → offers view for campaigners → sending email (the admin copies the link instead) → community volunteers.
 
 Agree these JSON shapes at kickoff; the frontend can run on mock JSON until each endpoint is live.
 
 ## 9. Open decisions that touch the API
-Processing fee (v0.4.1 ₦75 vs v2 none) · payment provider · upload limits · minimum volunteer age · fund-handling policy text · real contact channels · who may approve vs publish.
+Processing fee (v0.4.1 ₦75 vs v2 none; Paystack's fee is charged to the merchant account) · upload limits · minimum volunteer age · fund-handling policy text · real contact channels · who may approve vs publish.
 
-**NEW open decisions:** is the activation email sent by the system (and which email service), or does the admin always copy/WhatsApp the link · may campaigners see supporter contact details (O-1) · minimum withdrawal amount · who may approve withdrawals · should the applicant, not only the admin, record publication consent in the dashboard · real payout provider (withdrawals are simulated in the MVP).
+**Resolved 12:00:** payment provider = Paystack (test mode); seeded totals = none.
+
+**Resolved 12:05:** activation email = demo inbox (MailHog, already in the repo), no provider.
+
+**NEW open decisions:** may campaigners see supporter contact details (O-1) · minimum withdrawal amount · who may approve withdrawals · should the applicant, not only the admin, record publication consent in the dashboard · real payout provider (withdrawals are simulated in the MVP).
 
 ## 10. Corrections to v2 (NEW)
 1. **JWT audience.** v2 used `aud: crowdaid-admin`. With two roles, use one audience (`crowdaid-api`) and let the `role` claim decide access (§5a).
@@ -733,3 +779,20 @@ Processing fee (v0.4.1 ₦75 vs v2 none) · payment provider · upload limits ·
 4. **Raised and supporters can drift.** Update `raised` and `supporters` in the same transaction that saves a confirmed donation, or calculate them from confirmed donations, so the numbers can never disagree with the donation list.
 5. **Spam on public POSTs.** Rate-limit `/applications`, `/practical-help-offers`, `/contact-messages` and `/volunteers/*` (PROPOSED, P1).
 6. **Guessable references.** References are sequential (`CA-DON-0012`). `GET /donations/:ref` returns no personal data, so it is fine; the new status check (#34) needs the email as well for the same reason.
+7. **(Revised 12:00) Activation token in URLs.** v3 put the token in the API path (`GET /auth/activation/:token`), which gets written to access logs. Now `POST /auth/activation/check` with the token in the body (#23).
+8. **(Revised 12:20) HTTPS without buying a domain.** The repo already plans this (HACKATHON-PLAN §6D): set `DOMAIN=<SERVER_IP>.nip.io` and `PUBLIC_URL=https://<SERVER_IP>.nip.io` in `.env`, then `bash deploy.sh`. nip.io resolves that name to the server IP, so Caddy gets a normal Let's Encrypt certificate with no DNS setup. If nip.io's certificate rate limit gets in the way, try `<ip-with-dashes>.sslip.io` (same idea).
+   - **Plain `http://<ip>` fallback (`DOMAIN=:80`):** the site works and payments still confirm through #6 (verify on return). You lose: the Paystack webhook (#35 needs public HTTPS; skip it), the Copy button (`navigator.clipboard` needs HTTPS or localhost; use a fallback), and browsers show "Not secure" on password fields.
+   - The Caddyfile sets `Referrer-Policy: strict-origin-when-cross-origin`; that's acceptable for the activation page because the frontend removes the token from the address bar on load (#23).
+
+## 11. Configuration added for Paystack (REVISED 12:20)
+Add to `.env.sample` / `.env` and pass to the containers:
+
+| Setting | Where | Value |
+|---|---|---|
+| `PAYSTACK_SECRET_KEY` → `Paystack__SecretKey` | api (server only, never the web build) | `sk_test_…` from the Paystack **test** dashboard |
+| `PAYSTACK_PUBLIC_KEY` → `VITE_PAYSTACK_PUBLIC_KEY` | web build arg (only if using the Popup) | `pk_test_…` |
+| `Paystack__CallbackUrl` | api | `{PUBLIC_URL}/donate/result` (the server appends `?ref=`) |
+| `Paystack__BaseUrl` | api | `https://api.paystack.co` |
+
+- Webhook URL to set in the Paystack test dashboard after deploy: `https://<SERVER_IP>.nip.io/api/v1/webhooks/paystack`.
+- Caddy already proxies `/api/*` to the API, so the webhook needs no extra Caddy rule. ASP.NET must read the **raw** request body for the signature check (enable buffering before model binding).
