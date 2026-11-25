@@ -1,0 +1,22 @@
+{
+  "$schema": "http://json.schemastore.org/launchsettings.json",
+  "profiles": {
+    "http": {
+      "commandName": "Project",
+      "dotnetRunMessages": true,
+      "launchBrowser": true,
+      "launchUrl": "swagger",
+      "applicationUrl": "http://localhost:5159",
+      "environmentVariables": {
+        "ASPNETCORE_ENVIRONMENT": "Development",
+        "ConnectionStrings__Default": "Host=localhost;Port=5433;Database=crowdaid_db;Username=crowdaid;Password=crowdaid",
+        "Jwt__Secret": "dev-only-secret-change-me-0123456789abcdef",
+        "Admin__Email": "admin@crowdaid.demo",
+        "Admin__Password": "Admin@12345",
+        "Smtp__Host": "localhost",
+        "Smtp__Port": "1025",
+        "App__BaseUrl": "http://localhost:5173"
+      }
+    }
+  }
+}
