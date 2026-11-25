@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react";
+import { asError } from "../components/hooks";
 export const money = (value) =>
   value == null ? "Not provided" : `₦${Number(value).toLocaleString("en-NG")}`;
 export const date = (value) =>
@@ -25,11 +26,7 @@ export const dateTime = (value) =>
     : "—";
 export const text = (value) =>
   Array.isArray(value) ? value.join(", ") : value || "—";
-export const errorBody = (error) =>
-  error.response?.data?.error || {
-    message:
-      error.message || "We could not complete that action. Please try again.",
-  };
+export const errorBody = asError;
 export function ErrorBox({ error }) {
   if (!error) return null;
   return (
@@ -229,6 +226,7 @@ export function ReasonModal({
   onClose,
   onConfirm,
   children,
+  onError,
 }) {
   const copy = actionCopy[action];
   const [values, setValues] = useState({});
@@ -253,7 +251,9 @@ export function ReasonModal({
       await onConfirm(values);
       onClose();
     } catch (e) {
-      setError(errorBody(e));
+      const body = errorBody(e);
+      setError(body);
+      onError?.(body);
     } finally {
       setBusy(false);
     }

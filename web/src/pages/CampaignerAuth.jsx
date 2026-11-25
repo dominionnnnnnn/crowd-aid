@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { Link, useNavigate, useSearchParams } from "react-router-dom";
-import { campaignerApi, USE_MOCKS } from "../api/campaigner";
+import { campaignerApi } from "../api/campaigner";
 import { setCampaignerToken } from "../api/campaignerSession";
 import { requiredFields, validEmail } from "../components/constants";
 import { useForm, useResource } from "../components/hooks";
@@ -29,12 +29,6 @@ export function Login() {
         For applicants whose request has been approved. Use the link in your
         approval email to set your password first.
       </p>
-      {USE_MOCKS && (
-        <p className="p-warning">
-          Mock campaigner demo. Use a fictional valid email and any non-empty
-          password. This account is separate from admin.
-        </p>
-      )}
       {params.get("expired") && (
         <p className="p-error" role="alert">
           ⚠ Your session expired. Sign in again.
@@ -110,12 +104,6 @@ export function Activate() {
     <div className="p-auth-page p-card p-stack">
       <p className="p-eyebrow">Welcome to CrowdAid</p>
       <h1>Set up your account</h1>
-      {USE_MOCKS && (
-        <p className="p-warning">
-          Mock activation. Demo tokens begin with “demo-”; “expired” and “used”
-          show the recovery states. No real account password is changed.
-        </p>
-      )}
       {resource.loading ? (
         <Loading label="Checking your link…" />
       ) : resource.error ? (
@@ -126,12 +114,16 @@ export function Activate() {
       ) : (
         <>
           <p>
-            Hello {resource.data.name}. Set a password to follow{" "}
-            {resource.data.patientName}'s application.
+            Hello {resource.data.name}.{" "}
+            {resource.data.patientName
+              ? `Set a password to follow ${resource.data.patientName}'s application.`
+              : "Set a password for your CrowdAid account."}
           </p>
-          <p className="p-reference">
-            Reference <strong>{resource.data.applicationRef}</strong>
-          </p>
+          {resource.data.applicationRef && (
+            <p className="p-reference">
+              Reference <strong>{resource.data.applicationRef}</strong>
+            </p>
+          )}
           <p className="p-hint">Account email: {resource.data.emailMasked}</p>
           <form
             noValidate
@@ -152,12 +144,14 @@ export function Activate() {
               type="password"
               autoComplete="new-password"
               hint="At least 8 characters."
+              maxLength={128}
             />
             <Field
               label="Confirm password *"
               {...f.bind("confirmPassword")}
               type="password"
               autoComplete="new-password"
+              maxLength={128}
             />
             <Submit busy={f.busy} busyLabel="Setting up…">
               Set password and continue

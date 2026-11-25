@@ -179,8 +179,10 @@ function ApplicationDetail({ reference, onChanged }) {
     setError(null);
     setNotice("");
     try {
-      await adminApi.verification(reference, verification);
-      await refresh();
+      const next = await adminApi.verification(reference, verification);
+      setApp(next);
+      setVerification(next.verification);
+      onChanged();
       setNotice("Verification saved.");
     } catch (e) {
       setError(errorBody(e));
@@ -201,6 +203,11 @@ function ApplicationDetail({ reference, onChanged }) {
         },
       }));
       setNotice("New activation link created. Earlier links no longer work.");
+      try {
+        await refresh();
+      } catch (error) {
+        setError(errorBody(error));
+      }
       return;
     }
     const response = await adminApi.action(reference, {
@@ -208,7 +215,12 @@ function ApplicationDetail({ reference, onChanged }) {
       ...values,
     });
     if (response.account) setAccount(response.account);
-    await refresh();
+    setApp((current) => ({ ...current, status: response.status }));
+    try {
+      await refresh();
+    } catch (error) {
+      setError(errorBody(error));
+    }
     setNotice("Application updated.");
   }
   if (!app)
@@ -318,11 +330,21 @@ function ApplicationDetail({ reference, onChanged }) {
         <div className="review-grid">
           <form onSubmit={saveVerification}>
             <h3>Verification (private)</h3>
-            <Field name="verification-status" label="Verification status">
+            <Field
+              name="verification-status"
+              label="Verification status"
+              error={error?.fields?.status}
+            >
               <select
                 id="verification-status"
                 value={verification.status}
                 disabled={locked || busy}
+                aria-invalid={!!error?.fields?.status}
+                aria-describedby={
+                  error?.fields?.status
+                    ? "verification-status-error"
+                    : undefined
+                }
                 onChange={(e) =>
                   setVerification({ ...verification, status: e.target.value })
                 }
@@ -342,6 +364,8 @@ function ApplicationDetail({ reference, onChanged }) {
               rows={3}
               name="verification-method"
               label="How was it checked? (private)"
+              error={error?.fields?.method}
+              maxLength={1000}
               value={verification.method}
               disabled={locked || busy}
               onChange={(e) =>
@@ -409,7 +433,7 @@ function ApplicationDetail({ reference, onChanged }) {
               {[...app.log].reverse().map((entry, i) => (
                 <li key={`${entry.at}-${i}`}>
                   <strong>{entry.action}</strong> · {entry.by} ·{" "}
-                      {dateTime(entry.at)}
+                  {dateTime(entry.at)}
                   {entry.note && <p>{entry.note}</p>}
                 </li>
               ))}
@@ -426,7 +450,23 @@ function ApplicationDetail({ reference, onChanged }) {
           onResend={() => setModal("resend")}
         />
       )}
-      <PublishPanel reference={reference} app={app} onPublished={refresh} />
+      <PublishPanel
+        reference={reference}
+        app={app}
+        onPublished={async (response) => {
+          setApp((current) => ({
+            ...current,
+            status: response.status,
+            campaignId: response.campaignId,
+          }));
+          onChanged();
+          try {
+            await refresh();
+          } catch (error) {
+            setError(errorBody(error));
+          }
+        }}
+      />
       {modal && (
         <ReasonModal
           action={modal}
@@ -457,14 +497,19 @@ function AccountPanel({ app, account, onResend }) {
   return (
     <Card title="Account">
       <div className="spread">
-        <p>{app.email}</p>
+        <p>{account?.email || app.email}</p>
         <Pill status={account?.state || app.account.state} />
       </div>
       {account && typeof account.emailSent === "boolean" ? (
         <p className={account.emailSent ? "info-box" : "warning-box"}>
           {account.emailSent
-            ? "Activation email sent."
+            ? "Activation email sent to the MailHog demo inbox; it was not delivered to the applicant's real inbox."
             : "Activation email was not sent. Share the one-time link privately."}
+        </p>
+      ) : account?.state === "Activated" ? (
+        <p className="small muted">
+          The account is already activated. No activation email or new link was
+          needed.
         </p>
       ) : (
         <p className="small muted">
@@ -481,14 +526,14 @@ function AccountPanel({ app, account, onResend }) {
             value={account.activationLink}
           />
           <p className="small muted">
-            Expires {dateTime(account.expiresAt)} · Single use · Available only in
-            this view
+            Expires {dateTime(account.expiresAt)} · Single use · Available only
+            in this view
           </p>
           <div className="actions">
             <button onClick={copy}>{copied ? "Copied ✓" : "Copy link"}</button>
             <a
               className="button"
-              href={`https://wa.me/${app.phone.replace(/\D/g, "")}?text=${encodeURIComponent(`Set up your CrowdAid account: ${account.activationLink}`)}`}
+              href={`https://wa.me/${(account.phone || app.phone).replace(/\D/g, "")}?text=${encodeURIComponent(`Set up your CrowdAid account: ${account.activationLink}`)}`}
               target="_blank"
               rel="noreferrer"
             >
@@ -590,6 +635,12 @@ function PublishPanel({ reference, app, onPublished }) {
           <label className="checkbox">
             <input
               type="checkbox"
+              aria-invalid={!!error?.fields?.publicationConsent}
+              aria-describedby={
+                error?.fields?.publicationConsent
+                  ? "publication-consent-error"
+                  : undefined
+              }
               checked={form.publicationConsent}
               onChange={(e) =>
                 setForm({ ...form, publicationConsent: e.target.checked })
@@ -597,9 +648,20 @@ function PublishPanel({ reference, app, onPublished }) {
             />
             Publication consent obtained (separate from application consent)
           </label>
+          {error?.fields?.publicationConsent && (
+            <p id="publication-consent-error" className="field-error">
+              ⚠ {error.fields.publicationConsent}
+            </p>
+          )}
           <label className="checkbox">
             <input
               type="checkbox"
+              aria-invalid={!!error?.fields?.contentReviewed}
+              aria-describedby={
+                error?.fields?.contentReviewed
+                  ? "content-reviewed-error"
+                  : undefined
+              }
               checked={form.contentReviewed}
               onChange={(e) =>
                 setForm({ ...form, contentReviewed: e.target.checked })
@@ -608,6 +670,11 @@ function PublishPanel({ reference, app, onPublished }) {
             Public content reviewed: no contact details, documents or
             unconsented medical details
           </label>
+          {error?.fields?.contentReviewed && (
+            <p id="content-reviewed-error" className="field-error">
+              ⚠ {error.fields.contentReviewed}
+            </p>
+          )}
           <button
             className="primary"
             disabled={!form.publicationConsent || !form.contentReviewed}
@@ -624,12 +691,13 @@ function PublishPanel({ reference, app, onPublished }) {
           action="publish"
           reference={reference}
           onClose={() => setModal(false)}
+          onError={setError}
           onConfirm={async () => {
-            await adminApi.publish(reference, {
+            const response = await adminApi.publish(reference, {
               ...form,
               goal: Number(form.goal),
             });
-            await onPublished();
+            await onPublished(response);
           }}
         >
           <div className="info-box">
@@ -642,4 +710,3 @@ function PublishPanel({ reference, app, onPublished }) {
     </Card>
   );
 }
-

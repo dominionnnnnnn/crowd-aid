@@ -39,6 +39,7 @@ services:
       - Smtp__From=CrowdAid <no-reply@crowdaid.demo>
       - App__BaseUrl=http://localhost:5173       # used to build activation links in emails
       - Jwt__Secret=dev-only-secret-change-me-0123456789abcdef
+      - Paystack__SecretKey=${PAYSTACK_SECRET_KEY:-}
     depends_on:
       db:
         condition: service_healthy

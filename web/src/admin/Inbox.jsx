@@ -1,5 +1,7 @@
 import { useEffect, useState } from "react";
 import { adminApi } from "../api/admin";
+import { publicApi } from "../api/public";
+import { useResource } from "../components/hooks";
 import {
   Card,
   Details,
@@ -24,6 +26,14 @@ export default function Inbox({ kind }) {
   const [error, setError] = useState(null);
   const [version, setVersion] = useState(0);
   const [notice, setNotice] = useState("");
+  const [offerErrorRef, setOfferErrorRef] = useState(null);
+  const outreaches = useResource(
+    (signal) =>
+      kind === "volunteers"
+        ? publicApi.outreach(signal)
+        : Promise.resolve({ data: [] }),
+    [kind],
+  );
   useEffect(() => {
     let active = true;
     setLoading(true);
@@ -58,16 +68,16 @@ export default function Inbox({ kind }) {
     setBusy(row.reference);
     setError(null);
     setNotice("");
+    setOfferErrorRef(null);
     try {
-      await adminApi.offerStatus(row.reference, status);
+      const updated = await adminApi.offerStatus(row.reference, status);
       setRows((current) =>
-        current.map((r) =>
-          r.reference === row.reference ? { ...r, status } : r,
-        ),
+        current.map((r) => (r.reference === row.reference ? updated : r)),
       );
       setNotice(`${row.reference} marked ${status}.`);
     } catch (e) {
       setError(errorBody(e));
+      setOfferErrorRef(row.reference);
     } finally {
       setBusy(null);
     }
@@ -112,16 +122,26 @@ export default function Inbox({ kind }) {
             onChange={(e) => setFilter(e.target.value)}
           >
             <option value="">All registrations</option>
-            <option value="o1">Community fundraising outreach · 28 Nov</option>
+            {(outreaches.data?.data || []).map((event) => (
+              <option key={event.id} value={event.id}>
+                {event.title} · {date(event.date)}
+              </option>
+            ))}
             <option value="Community">Volunteer community (ongoing)</option>
           </select>
         </Field>
       )}
+      {kind === "volunteers" && outreaches.error && (
+        <>
+          <ErrorBox error={outreaches.error} />
+          <button onClick={outreaches.reload}>Reload outreach options</button>
+        </>
+      )}
       {kind === "withdrawals" && (
         <>
           <p className="warning-box">
-            <strong>Demo withdrawals.</strong> No money moves. Mark paid only
-            changes the simulated status.
+            <strong>Demo: no real money moves.</strong> Mark paid only changes
+            the simulated status.
           </p>
           <Field name="withdrawal-filter" label="Filter by status">
             <select
@@ -239,6 +259,16 @@ export default function Inbox({ kind }) {
                         <td>
                           <select
                             aria-label={`Status for ${row.reference}`}
+                            aria-invalid={
+                              offerErrorRef === row.reference &&
+                              !!error?.fields?.status
+                            }
+                            aria-describedby={
+                              offerErrorRef === row.reference &&
+                              error?.fields?.status
+                                ? `offer-error-${row.reference}`
+                                : undefined
+                            }
                             value={row.status}
                             disabled={busy === row.reference}
                             onChange={(e) => updateOffer(row, e.target.value)}
@@ -247,6 +277,15 @@ export default function Inbox({ kind }) {
                               <option key={s}>{s}</option>
                             ))}
                           </select>
+                          {offerErrorRef === row.reference &&
+                            error?.fields?.status && (
+                              <p
+                                id={`offer-error-${row.reference}`}
+                                className="field-error"
+                              >
+                                ⚠ {error.fields.status}
+                              </p>
+                            )}
                         </td>
                       </>
                     ) : kind === "volunteers" ? (
@@ -373,12 +412,24 @@ export default function Inbox({ kind }) {
           reference={modal.row.reference}
           onClose={() => setModal(null)}
           onConfirm={async (values) => {
-            await adminApi.withdrawalAction(modal.row.reference, {
-              action: modal.action,
-              ...values,
-            });
+            const updated = await adminApi.withdrawalAction(
+              modal.row.reference,
+              {
+                action: modal.action,
+                ...values,
+              },
+            );
+            setRows((current) =>
+              current.map((row) =>
+                row.reference === updated.reference
+                  ? { ...row, status: updated.status, isNew: false }
+                  : row,
+              ),
+            );
             setVersion((v) => v + 1);
-            setNotice("Demo withdrawal updated. No money moved.");
+            setNotice(
+              `${updated.reference} marked ${updated.status}. Demo: no real money moves.`,
+            );
           }}
         >
           <p>

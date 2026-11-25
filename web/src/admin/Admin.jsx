@@ -15,6 +15,42 @@ export default function Admin() {
   const [token, updateToken] = useState(getToken());
   const [expired, setExpired] = useState(false);
   const [tab, setTab] = useState("applications");
+  const [admin, setAdmin] = useState(null);
+  const [restoring, setRestoring] = useState(!!getToken());
+  const [sessionError, setSessionError] = useState(null);
+  const [sessionRetry, setSessionRetry] = useState(0);
+  useEffect(() => {
+    if (!token) {
+      setRestoring(false);
+      setAdmin(null);
+      return;
+    }
+    let active = true;
+    setRestoring(true);
+    setSessionError(null);
+    adminApi
+      .me()
+      .then((user) => {
+        if (!active) return;
+        if (user.role !== "admin") {
+          setToken(null);
+          updateToken(null);
+          setExpired(true);
+          return;
+        }
+        setAdmin(user);
+      })
+      .catch((error) => {
+        if (active && error.response?.status !== 401)
+          setSessionError(errorBody(error));
+      })
+      .finally(() => {
+        if (active) setRestoring(false);
+      });
+    return () => {
+      active = false;
+    };
+  }, [token, sessionRetry]);
   useEffect(() => {
     const expire = () => {
       updateToken(null);
@@ -37,49 +73,68 @@ export default function Admin() {
             <span>CrowdAid Admin</span>
           </div>
           {token && (
-            <button onClick={signOut}>
-              Sign out <span aria-hidden="true">↗</span>
-            </button>
+            <div className="actions">
+              <span className="small muted">
+                {admin?.name || "Restoring session…"}
+              </span>
+              <button onClick={signOut}>
+                Sign out <span aria-hidden="true">↗</span>
+              </button>
+            </div>
           )}
         </div>
       </header>
       {!token ? (
         <SignIn
           expired={expired}
-          onLogin={(value) => {
-            setToken(value);
-            updateToken(value);
+          onLogin={(result) => {
+            setAdmin(result.admin);
+            setToken(result.token);
+            updateToken(result.token);
             setExpired(false);
           }}
         />
       ) : (
         <main className="workspace">
           <h1 className="sr-only">CrowdAid admin</h1>
-          <nav className="tabs" aria-label="Admin sections">
-            {tabs.map(([key, label]) => (
-              <button
-                key={key}
-                aria-current={tab === key ? "page" : undefined}
-                className={tab === key ? "active" : ""}
-                onClick={() => setTab(key)}
-              >
-                {label}
-                {key === "withdrawals" && (
-                  <span className="tab-demo">Demo</span>
-                )}
+          {restoring ? (
+            <p role="status">Restoring your admin session…</p>
+          ) : sessionError ? (
+            <>
+              <ErrorBox error={sessionError} />
+              <button onClick={() => setSessionRetry((v) => v + 1)}>
+                Try again
               </button>
-            ))}
-          </nav>
-          {USE_MOCKS && (
-            <p className="demo-note">
-              Fictional demo data. Changes last until this page is refreshed.
-              Emails and payments are simulated.
-            </p>
-          )}
-          {tab === "applications" ? (
-            <Applications />
+            </>
           ) : (
-            <Inbox key={tab} kind={tab} />
+            <>
+              <nav className="tabs" aria-label="Admin sections">
+                {tabs.map(([key, label]) => (
+                  <button
+                    key={key}
+                    aria-current={tab === key ? "page" : undefined}
+                    className={tab === key ? "active" : ""}
+                    onClick={() => setTab(key)}
+                  >
+                    {label}
+                    {key === "withdrawals" && (
+                      <span className="tab-demo">Demo</span>
+                    )}
+                  </button>
+                ))}
+              </nav>
+              {USE_MOCKS && (
+                <p className="demo-note">
+                  Fictional demo data. Changes last until this page is
+                  refreshed. Emails and payments are simulated.
+                </p>
+              )}
+              {tab === "applications" ? (
+                <Applications />
+              ) : (
+                <Inbox key={tab} kind={tab} />
+              )}
+            </>
           )}
         </main>
       )}
@@ -107,7 +162,7 @@ function SignIn({ onLogin, expired }) {
     setBusy(true);
     try {
       const result = await adminApi.login(form);
-      onLogin(result.token);
+      onLogin(result);
     } catch (e) {
       setError(errorBody(e));
     } finally {

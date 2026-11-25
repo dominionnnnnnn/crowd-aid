@@ -1,8 +1,9 @@
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import { Link, useLocation } from "react-router-dom";
 import { publicApi } from "../api/public";
 import { useResource } from "../components/hooks";
-import { usePublic } from "../components/PublicLayout";
+import HeroCommunity from "../components/HeroCommunity";
+import FAQ from "../components/FAQ";
 import {
   CampaignCard,
   Empty,
@@ -11,7 +12,7 @@ import {
   Loading,
 } from "../components/UI";
 export default function Home() {
-  const { giveOpen, setGiveOpen } = usePublic();
+  const [giveOpen, setGiveOpen] = useState(false);
   const location = useLocation();
   const resource = useResource(
     (signal) => publicApi.campaigns({ featured: true }, signal),
@@ -23,29 +24,32 @@ export default function Home() {
   return (
     <>
       <section className="p-hero">
-        <div className="p-container p-stack">
-          <p className="p-eyebrow">Community healthcare support · Abeokuta</p>
-          <h1>Someone needs help. Someone else can help.</h1>
-          <p className="p-hero-copy">
-            CrowdAid helps people facing healthcare costs reach beyond their own
-            circle, to neighbours across Abeokuta who can give money, practical
-            help or their time.
-          </p>
-          <div className="p-hero-actions">
-            <Link className="button p-primary" to="/apply">
-              Get help
-            </Link>
-            <button
-              className="button p-primary"
-              aria-expanded={giveOpen}
-              aria-controls="give-help-panel"
-              onClick={() => setGiveOpen((v) => !v)}
-            >
-              Give help {giveOpen ? "−" : "+"}
-            </button>
-            <span>For yourself or someone you care for</span>
-            <span>Donate, offer practical help or volunteer</span>
+        <div className="p-container p-hero-layout">
+          <div className="p-hero-text p-stack">
+            <p className="p-eyebrow">Community healthcare support · Abeokuta</p>
+            <h1>Someone needs help. Someone else can help.</h1>
+            <p className="p-hero-copy">
+              CrowdAid helps people facing healthcare costs reach beyond their
+              own circle, to neighbours across Abeokuta who can give money,
+              practical help or their time.
+            </p>
+            <div className="p-hero-actions">
+              <Link className="button p-primary" to="/apply">
+                Get help
+              </Link>
+              <button
+                className="button p-outline"
+                aria-expanded={giveOpen}
+                aria-controls="give-help-panel"
+                onClick={() => setGiveOpen((v) => !v)}
+              >
+                Give help {giveOpen ? "−" : "+"}
+              </button>
+              <span>For yourself or someone you care for</span>
+              <span>Donate, offer practical help or volunteer</span>
+            </div>
           </div>
+          <HeroCommunity />
           {giveOpen && (
             <div
               id="give-help-panel"
@@ -149,6 +153,7 @@ export default function Home() {
           </Empty>
         )}
       </section>
+      <FAQ />
     </>
   );
 }

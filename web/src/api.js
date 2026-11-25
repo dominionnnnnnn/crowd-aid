@@ -34,8 +34,13 @@ api.interceptors.request.use((config) => {
   const path = config.url || "";
   if (path.startsWith("/admin/") && path !== "/admin/auth/login" && token)
     config.headers.Authorization = `Bearer ${token}`;
-  if ((path.startsWith("/me/") || path === "/auth/me") && getCampaignerToken())
+  if (path === "/auth/me") {
+    const sessionToken =
+      config.sessionRole === "admin" ? token : getCampaignerToken();
+    if (sessionToken) config.headers.Authorization = `Bearer ${sessionToken}`;
+  } else if (path.startsWith("/me/") && getCampaignerToken()) {
     config.headers.Authorization = `Bearer ${getCampaignerToken()}`;
+  }
   return config;
 });
 api.interceptors.response.use(
@@ -45,7 +50,9 @@ api.interceptors.response.use(
     if (error.response?.status === 401) {
       if (path.startsWith("/admin/") && path !== "/admin/auth/login")
         expireSession();
-      if (path.startsWith("/me/") || path === "/auth/me")
+      if (path === "/auth/me" && error.config?.sessionRole === "admin")
+        expireSession();
+      else if (path.startsWith("/me/") || path === "/auth/me")
         expireCampaignerSession();
     }
     return Promise.reject(error);

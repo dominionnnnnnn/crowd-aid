@@ -1,27 +1,59 @@
-# CrowdAid admin frontend
+# CrowdAid admin — live integration
 
-Run `npm install`, then `npm run dev`. Open `/admin`. The original API/database and email scaffold is at `/__check`.
+All admin features now use the real backend through `src/api/admin.js` (`USE_MOCKS = false`) and the single axios instance (`baseURL: /api/v1`). Admin mock files remain in place but are unused. C# controllers and DTOs are the contract; JSON is camelCase.
 
-## Demo
+## Authentication
 
-`src/api/admin.js` exports the only `USE_MOCKS` switch (currently `true`). In demo mode, sign in with a fictional valid email and any non-empty password; these are not real credentials. The demo session lasts eight hours. Only the session token is kept in sessionStorage. Records and mutations are in memory and reset on a full page reload. All records are fictional.
+`POST /admin/auth/login` sends `{ email, password }` and consumes `{ token, expiresIn, admin: { id, name, role } }`. The admin name appears in the top bar. `GET /auth/me` validates/restores the admin session, explicitly choosing the admin token even when a campaigner is also signed in.
 
-Applications and other queues use `src/mocks/` records adapted from the API seed section and Prototype v2. Opening a Received application moves it to In review. Save verification as Verified before approving. Approval creates a simulated activation link and reports that email was not sent. Publication fields start empty; both consent confirmations and a separate confirmation dialog are required. Publication changes the mock application only; this admin task does not implement public campaign pages. Withdrawals change demo statuses and never transfer money.
+The admin JWT is held in memory and sessionStorage under `crowdaid.admin.session`. Only protected admin calls and the admin session-restore request use it. A protected 401 clears only this session and shows “Your session expired. Sign in again.” Passwords are never persisted. Signing out leaves the campaigner session untouched.
 
-Activation links remain in the current detail view's memory only, and disappear when leaving it or reloading. They are not returned by application detail. Send a new link to obtain another one; earlier links are invalidated by the real API. Demo activation URLs are illustrative: this task does not implement the campaigner activation screen. Copy and WhatsApp actions are available when a link is returned. The app never automatically sends WhatsApp messages.
+## Live API inventory
 
-## Backend integration
+Paths below are relative to `/api/v1`.
 
-Set `USE_MOCKS = false` to route every admin call through the single axios instance in `src/api.js`, with baseURL `/api/v1` and a Bearer token interceptor. Protected 401 responses clear the token and show “Your session expired. Sign in again.” Login 401 errors remain on the sign-in form. Production must implement role checks; the frontend gate alone is not authorization.
+| Feature                 | Endpoint                                                 | Contract                                                                                                              |
+| ----------------------- | -------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------- |
+| Sign in                 | `POST /admin/auth/login`                                 | `AdminLoginResponse`                                                                                                  |
+| Session restore         | `GET /auth/me`                                           | `UserSummaryDto`, role `admin`                                                                                        |
+| Application list        | `GET /admin/applications?status=`                        | `{ data: AdminApplicationRowDto[] }`                                                                                  |
+| Application detail      | `GET /admin/applications/{reference}`                    | Full `AdminApplicationDetailDto`, private contact details, verification, files, log, publication, campaignId, account |
+| Verification            | `PATCH /admin/applications/{reference}/verification`     | `{ status, method }`; consumes the returned full detail                                                               |
+| Decisions               | `POST /admin/applications/{reference}/actions`           | `action` plus applicable `needed`, `message`, `reason`, `note`; response `{ reference, status, account }`             |
+| Publication             | `POST /admin/applications/{reference}/publish`           | Public fields, integer `goal`, `consentRecorded`, both consent/review flags; response `{ campaignId, status }`        |
+| Activation resend       | `POST /admin/applications/{reference}/activation`        | Direct `AccountLinkDto`                                                                                               |
+| Offers                  | `GET /admin/offers`                                      | `{ data: AdminOfferRowDto[] }`                                                                                        |
+| Offer status            | `PATCH /admin/offers/{reference}`                        | `{ status }`; returned row replaces the displayed row                                                                 |
+| Volunteers              | `GET /admin/volunteers?outreachId=` or `?kind=Community` | `{ data: AdminVolunteerRowDto[] }`                                                                                    |
+| Outreach filter options | `GET /outreach`                                          | Actual event IDs, titles and dates                                                                                    |
+| Messages                | `GET /admin/messages`                                    | `{ data: AdminMessageRowDto[] }`                                                                                      |
+| Withdrawals             | `GET /admin/withdrawals?status=`                         | `{ data: AdminWithdrawalRowDto[] }`                                                                                   |
+| Withdrawal decisions    | `POST /admin/withdrawals/{reference}/actions`            | `WithdrawalActionRequest`; response `{ reference, status }`                                                           |
 
-Implemented API paths and payloads follow endpoints 12–21 and 31–33 in `../api-spec-v3.md`. The implemented backend serves versioned endpoints under `/api/v1`; scaffold checks remain under `/api`.
+## Withdrawals — verified against C#
 
-- List queues use `{ data: [...] }`, following #13's list envelope. #18, #20, #21 and #31 list fields but do not explicitly give their envelopes. The adapter expects the same envelope. Volunteer `roleOrInterests` and `availability` render strings or arrays.
-- Detail expects #3 application fields plus #14's status, verification, files, log, publication, campaignId and account. Opening a Received record should transition it to In review as proposed by #14.
-- Mutation bodies that the spec leaves unspecified (#15, #19, #32 and non-approve #16) are deliberately not consumed; the UI reloads the detail/list or applies the submitted offer status after success.
-- Approve consumes `{ reference, status, account }`. #33 consumes the account object directly, as specified. Activation email failure must not undo approval. Link delivery status and the raw link are only available in those responses; #14 has neither. The UI explains this after refresh and offers a new link.
-- Enforce transition rules, verification lock, separate publication consent, one-time activation expiry/invalidation, and withdrawal balance/audit rules on the server.
-- `files` currently contains filenames only. The contract has no secure document download endpoint, so the admin shows filenames without inventing download URLs.
-- No account activation page, public campaign screens, real email, real payment or bank transfer implementation is included in this admin-only scope.
+`AdminWithdrawalsController` and the admin withdrawal DTOs are now present and integrated. Each row contains `reference`, `campaignTitle`, `applicantName`, `amount`, `status`, `requestedAt`, `isNew`, and `payout: { bankName, accountNumber, accountName }`. Full payout numbers are visible only to admins.
 
-No tests were added. Use `npm run build` to verify the production bundle.
+Decision bodies use `action` with applicable `note`, `reason`, `message`, `transferReference`:
+
+- `approve` from Requested; note optional.
+- `reject` from Requested or Approved; private reason and campaigner-visible message required.
+- `mark_paid` from Approved; transfer reference optional.
+
+The UI consumes the returned reference/status immediately, then reloads the filtered queue. It does not assume a full row is returned by an action. Server errors remain visible with retry; there is no “endpoint unavailable” fallback. The label is **Demo: no real money moves**. These are persisted server requests/statuses; marking paid makes no bank transfer.
+
+## Review, account links and errors
+
+Opening Received transitions it to In review on the backend. Save verification as Verified before approval. Verification locks after Approved/Published/Rejected. More info requested must be marked received before approval. Approval and publication remain separate; publication fields start empty, require both consent boxes and have their own confirmation dialog.
+
+Approve's optional account and resend's direct account object contain `state`, `email`, `phone`, nullable `activationLink`, nullable `expiresAt`, nullable `emailSent`. Links stay in the current detail view's memory, never logs or sessionStorage. Copy includes manual-selection recovery; WhatsApp opens a composed link without sending automatically. A successful demo email is described as sent to MailHog, not the applicant's real inbox. Already-activated accounts with no new link and null emailSent are handled.
+
+All error banners use the server's `{ error: { message, fields } }`. Field errors map to relevant inputs; non-JSON HTTP failures get plain retry wording rather than axios's generic status-code message. Phone numbers remain masked in lists and full in private detail views. Successful decisions retain their returned status/link even if a follow-up refresh fails.
+
+## Endpoints not supplied by the backend
+
+The reviewed controllers do not provide evidence upload or secure evidence download routes. The admin displays filenames without inventing document links. There are no campaign-update or outreach-creation admin endpoints/UI. All existing admin screens are live.
+
+## Verification
+
+Use `npm run build`. No tests were created or run. No backend, design, root, Caddyfile or Dockerfile edits; no push, merge or deployment.

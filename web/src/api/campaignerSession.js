@@ -13,6 +13,7 @@ export function setCampaignerToken(value) {
   } catch {
     /* Memory fallback. */
   }
+  window.dispatchEvent(new Event("crowdaid:campaigner-session-changed"));
 }
 export function expireCampaignerSession() {
   setCampaignerToken(null);
