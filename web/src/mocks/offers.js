@@ -1,0 +1,28 @@
+export const offers = [
+  {
+    reference: "CA-OFF-0001",
+    name: "Tunde Bakare",
+    phone: "+2348031234567",
+    types: ["Transportation"],
+    campaignTitle: "Help Usman get kidney surgery",
+    availability: ["Weekdays"],
+    area: "Kuto",
+    details: "I can drive in the mornings.",
+    status: "Contacted",
+    createdAt: "2026-11-21T09:00:00Z",
+    isNew: false,
+  },
+  {
+    reference: "CA-OFF-0002",
+    name: "Ngozi Eze",
+    phone: "+2348101234567",
+    types: ["Blood donor coordination"],
+    campaignTitle: "General (no campaign)",
+    availability: ["Flexible"],
+    area: "Ibara",
+    details: "",
+    status: "New",
+    createdAt: "2026-11-25T08:00:00Z",
+    isNew: true,
+  },
+];

@@ -1,0 +1,26 @@
+export const volunteers = [
+  {
+    reference: "CA-VOL-0001",
+    kind: "Outreach",
+    name: "Kemi Adebayo",
+    phone: "+2348031234567",
+    outreachLabel: "Community fundraising outreach · 28 Nov",
+    roleOrInterests: ["Collecting donations"],
+    availability: "All of it",
+    area: "Oke-Ilewo",
+    createdAt: "2026-11-21T09:00:00Z",
+    isNew: false,
+  },
+  {
+    reference: "CA-VOL-0002",
+    kind: "Community",
+    name: "Seun Afolabi",
+    phone: "+2349071234567",
+    outreachLabel: "Volunteer community (ongoing)",
+    roleOrInterests: ["Transport and logistics"],
+    availability: ["Weekends"],
+    area: "Obantoko",
+    createdAt: "2026-11-19T09:00:00Z",
+    isNew: false,
+  },
+];
