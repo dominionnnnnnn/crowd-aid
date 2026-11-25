@@ -45,7 +45,8 @@ public static class DependencyInjection
         services.AddScoped<IAdminInboxService, AdminInboxService>();
         services.AddScoped<IAdminWithdrawalService, AdminWithdrawalService>();
 
-        // Campaigner dashboard and withdrawals go here next.
+        // Campaigner dashboard
+        services.AddScoped<IMeService, MeService>();
 
         return services;
     }
