@@ -6,7 +6,7 @@ import {
   useLocation,
   useNavigate,
 } from "react-router-dom";
-import { campaignerApi, USE_MOCKS } from "../api/campaigner";
+import { campaignerApi, DASHBOARD_MOCKS } from "../api/campaigner";
 import {
   getCampaignerToken,
   setCampaignerToken,
@@ -104,11 +104,11 @@ function DashboardContent({ onSignOut }) {
         </div>
         <button onClick={onSignOut}>Sign out</button>
       </div>
-      {USE_MOCKS && (
+      {DASHBOARD_MOCKS && (
         <p className="p-warning">
-          <strong>Demo: no real money moves.</strong> This is a fictional
-          campaigner workspace. Public campaigns and donations use the live API
-          separately.
+          <strong>Demo: no real money moves.</strong> You are signed in to your
+          real account. The campaign figures, offers and withdrawals below are
+          fictional examples while dashboard data is being connected.
         </p>
       )}
       <nav className="p-dashboard-nav" aria-label="Your account">

@@ -6,10 +6,9 @@ import {
   useLocation,
   useNavigate,
 } from "react-router-dom";
-import { publicApi } from "../api/public";
-import { contactErrors, requiredFields } from "./constants";
-import { useForm } from "./hooks";
-import { Consent, ErrorSummary, Field, Modal, ResultPanel, Submit } from "./UI";
+import ContactForm from "./ContactForm";
+
+import { Modal } from "./UI";
 const PublicContext = createContext(null);
 export const usePublic = () => useContext(PublicContext);
 export default function PublicLayout() {
@@ -75,7 +74,7 @@ export default function PublicLayout() {
               </NavLink>
               <NavLink to="/campaigns">Campaigns</NavLink>
               <NavLink to="/volunteer">Volunteer</NavLink>
-              <button onClick={() => setContact(null)}>Contact</button>
+              <NavLink to="/contact">Contact</NavLink>
               <Link className="button p-primary" to="/apply">
                 Get help
               </Link>
@@ -121,6 +120,7 @@ export default function PublicLayout() {
               <Link to="/volunteer">Volunteer</Link>
               <Link to="/apply/status">Check application status</Link>
               <Link to="/login">Campaigner sign in</Link>
+              <Link to="/contact">Contact</Link>
             </nav>
             <div className="p-stack">
               <h2>Contact CrowdAid</h2>
@@ -128,12 +128,9 @@ export default function PublicLayout() {
                 Questions about a campaign or your request? Send us a message
                 and we'll reply by phone or WhatsApp.
               </p>
-              <button
-                className="button p-outline"
-                onClick={() => setContact(null)}
-              >
+              <Link className="button p-outline" to="/contact">
                 Contact CrowdAid
-              </button>
+              </Link>
             </div>
           </div>
           <p className="p-container p-footer-note">
@@ -165,14 +162,9 @@ export default function PublicLayout() {
               <Link to="/volunteer" onClick={() => setMenu(false)}>
                 Volunteer
               </Link>
-              <button
-                onClick={() => {
-                  setMenu(false);
-                  setContact(null);
-                }}
-              >
+              <Link to="/contact" onClick={() => setMenu(false)}>
                 Contact
-              </button>
+              </Link>
               <Link to="/login" onClick={() => setMenu(false)}>
                 Campaigner sign in
               </Link>
@@ -191,62 +183,14 @@ export default function PublicLayout() {
   );
 }
 function ContactDialog({ campaign, onClose }) {
-  const f = useForm(
-    { campaignId: campaign?.id || null, name: "", phone: "", message: "" },
-    "contact-",
-  );
+  const [busy, setBusy] = useState(false);
   return (
-    <Modal title="Contact CrowdAid" onClose={onClose} busy={f.busy}>
-      {f.result ? (
-        <>
-          <ResultPanel title="Message sent" reference={f.result.reference}>
-            <p>The CrowdAid team will reply by phone or WhatsApp.</p>
-          </ResultPanel>
-          <button onClick={onClose}>Done</button>
-        </>
-      ) : (
-        <form
-          noValidate
-          onSubmit={f.submit(
-            (v) => publicApi.contact(v),
-            (v) => ({ ...contactErrors(v), ...requiredFields(v, ["message"]) }),
-          )}
-        >
-          <p className="p-info">
-            About: {campaign?.title || "General enquiry"}
-          </p>
-          <p>
-            Your message goes to the CrowdAid team only. We reply by phone or
-            WhatsApp.
-          </p>
-          <ErrorSummary error={f.error} prefix={f.prefix} />
-          <Field
-            label="Your name *"
-            {...f.bind("name")}
-            autoComplete="name"
-            maxLength={120}
-          />
-          <Field
-            label="Phone or WhatsApp number *"
-            {...f.bind("phone")}
-            autoComplete="tel"
-            type="tel"
-          />
-          <Field
-            label="Message *"
-            {...f.bind("message")}
-            textarea
-            rows={4}
-            maxLength={1000}
-          />
-          <div className="p-actions">
-            <button type="button" onClick={onClose} disabled={f.busy}>
-              Cancel
-            </button>
-            <Submit busy={f.busy}>Send message</Submit>
-          </div>
-        </form>
-      )}
+    <Modal title="Contact CrowdAid" onClose={onClose} busy={busy}>
+      <ContactForm
+        campaign={campaign}
+        onDone={onClose}
+        onBusyChange={setBusy}
+      />
     </Modal>
   );
 }

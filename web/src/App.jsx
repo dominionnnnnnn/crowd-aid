@@ -14,6 +14,7 @@ import DonationResult from "./pages/DonationResult";
 import { Activate, Login } from "./pages/CampaignerAuth";
 import Dashboard from "./pages/Dashboard";
 import NotFound from "./pages/NotFound";
+import Contact from "./pages/Contact";
 import "./styles.css";
 import "./public.css";
 export default function App() {
@@ -30,6 +31,7 @@ export default function App() {
           <Route path="/apply" element={<Apply />} />
           <Route path="/apply/status" element={<ApplicationStatus />} />
           <Route path="/help" element={<PracticalHelp />} />
+          <Route path="/contact" element={<Contact />} />
           <Route path="/volunteer" element={<Volunteer />} />
           <Route path="/donate" element={<Donate />} />
           <Route path="/donate/result" element={<DonationResult />} />

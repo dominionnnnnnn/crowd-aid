@@ -1,26 +1,38 @@
 import api from "../api";
-import { campaignerMock } from "../mocks/campaigner";
 import {
   getCampaignerToken,
   expireCampaignerSession,
 } from "./campaignerSession";
-export const USE_MOCKS = true;
+export const DASHBOARD_MOCKS = true;
 async function request(method, path, data, params) {
-  if (!USE_MOCKS)
+  // Authentication and session restoration always use the real backend.
+  if (!path.startsWith("/me/") || !DASHBOARD_MOCKS)
     return (await api.request({ method, url: path, data, params })).data;
-  try {
-    return await campaignerMock(
-      method,
-      path,
-      data,
-      params,
-      getCampaignerToken(),
-    );
-  } catch (e) {
-    if (e.response?.status === 401 && path !== "/auth/login")
-      expireCampaignerSession();
-    throw e;
+  if (!getCampaignerToken()) {
+    expireCampaignerSession();
+    throw {
+      response: {
+        status: 401,
+        data: {
+          error: {
+            code: "UNAUTHENTICATED",
+            message: "Your session expired. Sign in again.",
+            fields: {},
+          },
+        },
+      },
+    };
   }
+  // The dashboard store is fictional; its old demo-token format is internal only.
+  // Never pass a real JWT to the mock auth implementation.
+  const { campaignerMock } = await import("../mocks/campaigner");
+  return campaignerMock(
+    method,
+    path,
+    data,
+    params,
+    `demo-campaigner.${Date.now() + 28800000}`,
+  );
 }
 export const campaignerApi = {
   login: (body) => request("post", "/auth/login", body),
