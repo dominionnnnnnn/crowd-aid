@@ -4,6 +4,7 @@ import api from "./api";
 // CrowdAid scaffold page: proves React -> /api -> Postgres and API -> MailHog.
 // Replace with the real app (routes, pages from the design) once hosting is confirmed.
 export default function App() {
+  const [health, setHealth] = useState(null);
   const [hello, setHello] = useState(null);
   const [error, setError] = useState("");
   const [to, setTo] = useState("");
@@ -11,16 +12,20 @@ export default function App() {
 
   useEffect(() => {
     api
-      .get("/hello")
+      .get("/api/health", { baseURL: "" })
+      .then((r) => setHealth(r.data))
+      .catch((e) => setError(e.response?.data?.error?.message || e.message));
+    api
+      .get("/api/hello", { baseURL: "" })
       .then((r) => setHello(r.data))
-      .catch((e) => setError(e.message));
+      .catch((e) => setError(e.response?.data?.error?.message || e.message));
   }, []);
 
   const sendTest = async (e) => {
     e.preventDefault();
     setMail("Sending…");
     try {
-      const r = await api.post("/test-email", { to });
+      const r = await api.post("/api/test-email", { to }, { baseURL: "" });
       setMail(`✅ Sent to ${r.data.to}. Open MailHog to see it.`);
     } catch (err) {
       setMail(`❌ ${err.response?.data?.error?.fields?.to || err.message}`);
@@ -34,6 +39,7 @@ export default function App() {
 
       <section style={s.card}>
         <h2>1 · API + database</h2>
+        {health && <p>Health: {health.status}</p>}
         {error && <p style={{ color: "#B42318" }}>❌ {error}</p>}
         {hello ? (
           <p style={s.big}>✅ {hello.message}</p>

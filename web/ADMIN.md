@@ -12,9 +12,9 @@ Activation links remain in the current detail view's memory only, and disappear 
 
 ## Backend integration
 
-Set `USE_MOCKS = false` to route every admin call through the single axios instance in `src/api.js`, with baseURL `/api` and a Bearer token interceptor. Protected 401 responses clear the token and show “Your session expired. Sign in again.” Login 401 errors remain on the sign-in form. Production must implement role checks; the frontend gate alone is not authorization.
+Set `USE_MOCKS = false` to route every admin call through the single axios instance in `src/api.js`, with baseURL `/api/v1` and a Bearer token interceptor. Protected 401 responses clear the token and show “Your session expired. Sign in again.” Login 401 errors remain on the sign-in form. Production must implement role checks; the frontend gate alone is not authorization.
 
-Implemented API paths and payloads follow endpoints 12–21 and 31–33 in `../api-spec-v3.md`. The repository's `/api` convention takes precedence over the spec's proposed `/api/v1` prefix.
+Implemented API paths and payloads follow endpoints 12–21 and 31–33 in `../api-spec-v3.md`. The implemented backend serves versioned endpoints under `/api/v1`; scaffold checks remain under `/api`.
 
 - List queues use `{ data: [...] }`, following #13's list envelope. #18, #20, #21 and #31 list fields but do not explicitly give their envelopes. The adapter expects the same envelope. Volunteer `roleOrInterests` and `availability` render strings or arrays.
 - Detail expects #3 application fields plus #14's status, verification, files, log, publication, campaignId and account. Opening a Received record should transition it to In review as proposed by #14.

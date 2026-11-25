@@ -1,0 +1,252 @@
+import { createContext, useContext, useEffect, useState } from "react";
+import {
+  Link,
+  NavLink,
+  Outlet,
+  useLocation,
+  useNavigate,
+} from "react-router-dom";
+import { publicApi } from "../api/public";
+import { contactErrors, requiredFields } from "./constants";
+import { useForm } from "./hooks";
+import { Consent, ErrorSummary, Field, Modal, ResultPanel, Submit } from "./UI";
+const PublicContext = createContext(null);
+export const usePublic = () => useContext(PublicContext);
+export default function PublicLayout() {
+  const [contact, setContact] = useState(undefined);
+  const [menu, setMenu] = useState(false);
+  const [giveOpen, setGiveOpen] = useState(false);
+  const [offline, setOffline] = useState(!navigator.onLine);
+  const location = useLocation();
+  const navigate = useNavigate();
+  useEffect(() => {
+    setMenu(false);
+    window.scrollTo({ top: 0 });
+  }, [location.pathname]);
+  useEffect(() => {
+    const on = () => setOffline(false);
+    const off = () => setOffline(true);
+    window.addEventListener("online", on);
+    window.addEventListener("offline", off);
+    return () => {
+      window.removeEventListener("online", on);
+      window.removeEventListener("offline", off);
+    };
+  }, []);
+  const give = () => {
+    if (location.pathname === "/" || location.pathname === "/give")
+      setGiveOpen((v) => !v);
+    else {
+      setGiveOpen(true);
+      navigate("/give");
+    }
+  };
+  return (
+    <PublicContext.Provider
+      value={{
+        contact: (campaign = null) => setContact(campaign),
+        giveOpen,
+        setGiveOpen,
+        offline,
+      }}
+    >
+      <div className="public-app">
+        <a className="p-skip" href="#public-main">
+          Skip to main content
+        </a>
+        {offline && (
+          <div className="p-offline" role="status">
+            ⚠ You're offline. You can keep filling in forms; send them when
+            you're back online.
+          </div>
+        )}
+        <header className="p-header">
+          <div className="p-header-inner">
+            <Link to="/" aria-label="CrowdAid home">
+              <img
+                className="p-logo"
+                src="/assets/logo/crowdaid-logo.svg"
+                alt="CrowdAid"
+              />
+            </Link>
+            <nav className="p-desktop-nav" aria-label="Main">
+              <NavLink to="/" end>
+                Home
+              </NavLink>
+              <NavLink to="/campaigns">Campaigns</NavLink>
+              <NavLink to="/volunteer">Volunteer</NavLink>
+              <button onClick={() => setContact(null)}>Contact</button>
+              <Link className="button p-primary" to="/apply">
+                Get help
+              </Link>
+              <button
+                className="button p-primary"
+                onClick={give}
+                aria-expanded={giveOpen}
+              >
+                Give help {giveOpen ? "−" : "+"}
+              </button>
+            </nav>
+            <div className="p-mobile-nav">
+              <Link to="/campaigns">Campaigns</Link>
+              <button
+                aria-label="Menu"
+                aria-expanded={menu}
+                onClick={() => setMenu(true)}
+              >
+                ☰
+              </button>
+            </div>
+          </div>
+        </header>
+        <main id="public-main" tabIndex={-1}>
+          <Outlet />
+        </main>
+        <footer className="p-footer">
+          <div className="p-container p-footer-grid">
+            <div className="p-stack">
+              <img
+                src="/assets/logo/crowdaid-logo-tagline.svg"
+                alt="CrowdAid — Healthcare, Together."
+              />
+              <p>
+                Community healthcare support, starting in Abeokuta, Ogun State.
+              </p>
+            </div>
+            <nav aria-label="Explore">
+              <h2>Explore</h2>
+              <Link to="/campaigns">Campaigns</Link>
+              <Link to="/apply">Get help</Link>
+              <Link to="/help">Offer practical help</Link>
+              <Link to="/volunteer">Volunteer</Link>
+              <Link to="/apply/status">Check application status</Link>
+              <Link to="/login">Campaigner sign in</Link>
+            </nav>
+            <div className="p-stack">
+              <h2>Contact CrowdAid</h2>
+              <p>
+                Questions about a campaign or your request? Send us a message
+                and we'll reply by phone or WhatsApp.
+              </p>
+              <button
+                className="button p-outline"
+                onClick={() => setContact(null)}
+              >
+                Contact CrowdAid
+              </button>
+            </div>
+          </div>
+          <p className="p-container p-footer-note">
+            CrowdAid charges no platform fee. Paystack test payments use no real
+            money.
+          </p>
+        </footer>
+        {menu && (
+          <Modal title="Menu" onClose={() => setMenu(false)}>
+            <nav className="p-menu" aria-label="Mobile main">
+              <Link to="/" onClick={() => setMenu(false)}>
+                Home
+              </Link>
+              <Link to="/campaigns" onClick={() => setMenu(false)}>
+                Campaigns
+              </Link>
+              <Link to="/apply" onClick={() => setMenu(false)}>
+                Get help
+              </Link>
+              <Link
+                to="/give"
+                onClick={() => {
+                  setGiveOpen(true);
+                  setMenu(false);
+                }}
+              >
+                Give help
+              </Link>
+              <Link to="/volunteer" onClick={() => setMenu(false)}>
+                Volunteer
+              </Link>
+              <button
+                onClick={() => {
+                  setMenu(false);
+                  setContact(null);
+                }}
+              >
+                Contact
+              </button>
+              <Link to="/login" onClick={() => setMenu(false)}>
+                Campaigner sign in
+              </Link>
+            </nav>
+          </Modal>
+        )}
+        {contact !== undefined && (
+          <ContactDialog
+            key={contact?.id || "general"}
+            campaign={contact}
+            onClose={() => setContact(undefined)}
+          />
+        )}
+      </div>
+    </PublicContext.Provider>
+  );
+}
+function ContactDialog({ campaign, onClose }) {
+  const f = useForm(
+    { campaignId: campaign?.id || null, name: "", phone: "", message: "" },
+    "contact-",
+  );
+  return (
+    <Modal title="Contact CrowdAid" onClose={onClose} busy={f.busy}>
+      {f.result ? (
+        <>
+          <ResultPanel title="Message sent" reference={f.result.reference}>
+            <p>The CrowdAid team will reply by phone or WhatsApp.</p>
+          </ResultPanel>
+          <button onClick={onClose}>Done</button>
+        </>
+      ) : (
+        <form
+          noValidate
+          onSubmit={f.submit(
+            (v) => publicApi.contact(v),
+            (v) => ({ ...contactErrors(v), ...requiredFields(v, ["message"]) }),
+          )}
+        >
+          <p className="p-info">
+            About: {campaign?.title || "General enquiry"}
+          </p>
+          <p>
+            Your message goes to the CrowdAid team only. We reply by phone or
+            WhatsApp.
+          </p>
+          <ErrorSummary error={f.error} prefix={f.prefix} />
+          <Field
+            label="Your name *"
+            {...f.bind("name")}
+            autoComplete="name"
+            maxLength={120}
+          />
+          <Field
+            label="Phone or WhatsApp number *"
+            {...f.bind("phone")}
+            autoComplete="tel"
+            type="tel"
+          />
+          <Field
+            label="Message *"
+            {...f.bind("message")}
+            textarea
+            rows={4}
+            maxLength={1000}
+          />
+          <div className="p-actions">
+            <button type="button" onClick={onClose} disabled={f.busy}>
+              Cancel
+            </button>
+            <Submit busy={f.busy}>Send message</Submit>
+          </div>
+        </form>
+      )}
+    </Modal>
+  );
+}
