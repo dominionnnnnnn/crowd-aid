@@ -33,3 +33,10 @@ public interface IAdminInboxService
     Task<ListResponse<AdminVolunteerRowDto>> ListVolunteersAsync(string? outreachId, string? kind, CancellationToken ct = default);
     Task<ListResponse<AdminMessageRowDto>> ListMessagesAsync(CancellationToken ct = default);
 }
+
+/// <summary>Admin side of demo withdrawals (spec #31–32). No money moves.</summary>
+public interface IAdminWithdrawalService
+{
+    Task<ListResponse<AdminWithdrawalRowDto>> ListAsync(string? status, CancellationToken ct = default);
+    Task<WithdrawalActionResponse> ActionAsync(string reference, WithdrawalActionRequest request, string adminName, Guid adminId, CancellationToken ct = default);
+}
