@@ -38,7 +38,13 @@ public static class DependencyInjection
         services.AddScoped<IDonationService, DonationService>();
         services.AddScoped<ICommunityService, CommunityService>();
 
-        // Admin and campaigner services go here next.
+        // Sign-in and admin
+        services.AddScoped<ActivationLinkService>();
+        services.AddScoped<IAuthService, AuthService>();
+        services.AddScoped<IAdminApplicationService, AdminApplicationService>();
+        services.AddScoped<IAdminInboxService, AdminInboxService>();
+
+        // Campaigner dashboard and withdrawals go here next.
 
         return services;
     }
