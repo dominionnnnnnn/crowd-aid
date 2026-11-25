@@ -35,6 +35,7 @@ services:
       - Smtp__From=CrowdAid <no-reply@crowdaid.demo>
       - App__BaseUrl=${PUBLIC_URL}
       - Jwt__Secret=${JWT_SECRET}
+      - Paystack__SecretKey=${PAYSTACK_SECRET_KEY}
       - Admin__Email=${ADMIN_EMAIL}
       - Admin__Password=${ADMIN_PASSWORD}
     depends_on:
